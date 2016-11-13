@@ -59,11 +59,7 @@ class AttentiveRegularization1D(Layer):
         input_length = input_shape[1]
         input_dim = input_shape[2]
         
-        #mu_init = np.arange(input_length, dtype=theano.config.floatX) - (input_length/2 * (1 + (np.random.rand(input_dim,1)*2-1).astype(theano.config.floatX)))
-        #sig_init = np.tile(np.ones((input_dim,1),theano.config.floatX)*input_length/2, (1,input_length))
-        
         mu_init = np.zeros((input_dim,1),theano.config.floatX)
-        #mu_init = (np.random.randn(input_dim,1).astype(theano.config.floatX) + 1)/2
         sig_init = np.ones((input_dim,1),theano.config.floatX)
         base = np.tile(np.arange(input_length, dtype=theano.config.floatX), (input_dim,1))
         
