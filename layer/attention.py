@@ -18,12 +18,10 @@ class AttentiveRegularization1D(Layer):
         input_dim: Number of channels/dimensions in the input.
         mu_constraint: instance of the [constraints](../constraints.md) module 
             (eg. maxnorm, nonneg), applied to the attention function means.
-        sig_constraint: instance of the [constraints](../constraints.md) module 
-            (eg. maxnorm, nonneg), applied to the attention function standard deviations.
+        sig_constraint: constraint applied to the attention function standard deviations.
         mu_regularizer: instance of [WeightRegularizer](../regularizers.md)
             (eg. L1 or L2 regularization), applied to the attention function means.
-        sig_regularizer: instance of [WeightRegularizer](../regularizers.md), 
-            applied to the attention function standard deviations.
+        sig_regularizer: regularizer applied to the attention function standard deviations.
         
     # Input shape
         3D tensor with shape: (samples, input_length, input_dim).
