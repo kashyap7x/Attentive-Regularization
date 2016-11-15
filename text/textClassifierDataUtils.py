@@ -139,5 +139,3 @@ def loadEmbeddings (dirPath, wordIndex, numWords):
 				embeddingMatrix[i] = embeddingVector
 				  
 	return embeddingMatrix, numWordsActual
-
-
