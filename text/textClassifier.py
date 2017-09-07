@@ -1,5 +1,5 @@
 '''
-CNN for 20 Newsgroups classification, implemented on Keras with Theano backend.
+CNN for 20 Newsgroups classification, implemented on Keras with Tensorflow backend.
 Dataset Description - http://qwone.com/~jason/20Newsgroups/
 Data - http://qwone.com/~jason/20Newsgroups/20news-bydate.tar.gz
 GloVe Embeddings Description - http://nlp.stanford.edu/projects/glove/
@@ -7,27 +7,29 @@ Embeddings - http://nlp.stanford.edu/data/glove.6B.zip
 '''
 
 from __future__ import print_function
-from textClassifierDataUtils import load20NewsData, loadEmbeddings
+from textClassifierDataUtils import load20NewsData, loadEmbeddings, visualizeLayerOutput
+import sys
+sys.path.append('..')
 import numpy as np
 import matplotlib.pyplot as plt
-import theano
-
+from layer import Target1D
 from keras.models import Model
 from keras.layers import Dense, Dropout, Input, Flatten, merge
-from keras.layers import Conv1D, MaxPooling1D, Embedding, AttentiveRegularization1D
+from keras.layers import Conv1D, MaxPooling1D, Embedding
 from keras.optimizers import Adam
+import tensorflow as tf
 
-baseDir = '/home/kashyap/keras-master'
-gloveDir = baseDir + '/glove.6B/'
-trainDir = baseDir + '/20news-bydate-train/'
-testDir = baseDir + '/20news-bydate-test/'
+baseDir = 'C:/keras/text/'
+gloveDir = baseDir + 'glove.6B/'
+trainDir = baseDir + '20news-bydate-train/'
+testDir = baseDir + '20news-bydate-test/'
 
 valSplit = 0.1
 seqLen = 500
 numWords = 20000
 dType = 'float32'
 
-batchSize = 32
+batchSize = 64
 numEpoch = 20
 
 # Load the data
@@ -53,7 +55,7 @@ embeddingLayer = Embedding(numWordsActual + 1,
 inputSequences = Input(shape=(seqLen,), dtype='int32')
 embeddedVectors = embeddingLayer(inputSequences)
 x = Conv1D(256, 3, activation='relu', border_mode='same')(embeddedVectors)
-x = AttentiveRegularization1D()(x)
+x = Target1D(attention_function='cauchy')(x)
 x = MaxPooling1D(seqLen)(x)
 x = Dropout(0.5)(x)
 x = Flatten()(x)
@@ -71,25 +73,19 @@ model.compile(loss='categorical_crossentropy',
               optimizer=adam,
               metrics=['accuracy'])
 
-'''
+
 # Display the attention layer initialization
-function = model.layers[3].function
-plt.imshow(function.eval(), cmap='gray')
-plt.show()
-'''
+visualizeLayerOutput(model)
 
 model.fit(X_train, Y_train,
 	batch_size=batchSize,
-	nb_epoch=numEpoch,
+	epochs=numEpoch,
 	validation_data=(X_val, Y_val),
 	shuffle=True)
 
 # Evaluate test accuraccy
 print (model.evaluate(X_test, Y_test, batch_size=batchSize))
 
-'''
+
 # Display the attention layer final values
-function = model.layers[3].function
-plt.imshow(function.eval(), cmap='gray')
-plt.show()
-'''
+visualizeLayerOutput(model)

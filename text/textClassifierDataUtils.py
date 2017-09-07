@@ -5,9 +5,12 @@ import sys
 from keras.preprocessing.text import Tokenizer, text_to_word_sequence
 from keras.preprocessing.sequence import pad_sequences
 from keras.utils.np_utils import to_categorical
+from keras import backend as K
+import matplotlib.pyplot as plt
 
-def loadTexts (dirPath):
-  '''
+
+def loadTexts(dirPath):
+	'''
   Load text data from a directory and process into data and label vectors.
 
   Inputs:
@@ -17,14 +20,14 @@ def loadTexts (dirPath):
   - data: List of strings from dataset
   - labels: Categorical class matrix form of label vector
   '''
-  # Create lists for samples, label IDs and dictionary mapping label
-  # names to numeric IDs
-  data = []
-  labels = []
-  labelIndex = {}
-  
-  # Load the data from the directory
-  for name in sorted(os.listdir(dirPath)):
+	# Create lists for samples, label IDs and dictionary mapping label
+	# names to numeric IDs
+	data = []
+	labels = []
+	labelIndex = {}
+
+	# Load the data from the directory
+	for name in sorted(os.listdir(dirPath)):
 		path = os.path.join(dirPath, name)
 		if os.path.isdir(path):
 			label_ID = len(labelIndex)
@@ -39,14 +42,14 @@ def loadTexts (dirPath):
 					data.append(f.read())
 					f.close()
 					labels.append(label_ID)
-  
-  # Convert class vector to class matrix
-  labels = to_categorical(np.asarray(labels))
-  return data, labels
+
+	# Convert class vector to class matrix
+	labels = to_categorical(np.asarray(labels))
+	return data, labels
 
 
-def load20NewsData (trainDir, testDir, numWords, seqLen, dType, valSplit):
-  '''
+def load20NewsData(trainDir, testDir, numWords, seqLen, dType, valSplit):
+	'''
   Load and preprocess the 20 Newsgroups text classification dataset.
   
   Inputs:
@@ -66,44 +69,45 @@ def load20NewsData (trainDir, testDir, numWords, seqLen, dType, valSplit):
   - Y_test: Array of test labels (categorical class matrix form)
   - wordIndex: Dictionary used for word to sequence mapping
   '''
-  # Call loadTexts for train data
-  trainData, trainLabels = loadTexts (trainDir)
+	# Call loadTexts for train data
+	trainData, trainLabels = loadTexts(trainDir)
 
-  # Convert list of strings to sequences of integers padded to seqLen
-  tokenizer = Tokenizer(nb_words=numWords)
-  tokenizer.fit_on_texts(trainData)
-  trainSequences = tokenizer.texts_to_sequences(trainData)
-  trainDataPadded = pad_sequences(trainSequences, maxlen=seqLen)
+	# Convert list of strings to sequences of integers padded to seqLen
+	tokenizer = Tokenizer(nb_words=numWords)
+	tokenizer.fit_on_texts(trainData)
+	trainSequences = tokenizer.texts_to_sequences(trainData)
+	trainDataPadded = pad_sequences(trainSequences, maxlen=seqLen)
 
-  # Splitting into a training set and a validation set
-  indices = np.arange(trainDataPadded.shape[0])
-  np.random.shuffle(indices)
-  trainDataPadded = trainDataPadded[indices]
-  trainLabels = trainLabels[indices]
-  numValSamples = int(valSplit * trainDataPadded.shape[0])
+	# Splitting into a training set and a validation set
+	indices = np.arange(trainDataPadded.shape[0])
+	np.random.shuffle(indices)
+	trainDataPadded = trainDataPadded[indices]
+	trainLabels = trainLabels[indices]
+	numValSamples = int(valSplit * trainDataPadded.shape[0])
 
-  X_train = (trainDataPadded[:-numValSamples]).astype(dType)
-  Y_train = trainLabels[:-numValSamples]
-  X_val = (trainDataPadded[-numValSamples:]).astype(dType)
-  Y_val = trainLabels[-numValSamples:]
+	X_train = (trainDataPadded[:-numValSamples]).astype(dType)
+	Y_train = trainLabels[:-numValSamples]
+	X_val = (trainDataPadded[-numValSamples:]).astype(dType)
+	Y_val = trainLabels[-numValSamples:]
 
-  # Call loadTexts for test data
-  testData, Y_test = loadTexts (testDir)
+	# Call loadTexts for test data
+	testData, Y_test = loadTexts(testDir)
 
-  # Use dictionary of mappings from training to convert to sequences
-  wordIndex = tokenizer.word_index
-  # Loop over strings in list
-  for ind, string in enumerate(testData):
-      testSequences = text_to_word_sequence(string)
-      # Loop over words in string
-      for idx, word in enumerate(testSequences):
-          testSequences[idx] = wordIndex.get(testSequences[idx], numWords+1)
-      testData[ind] = [value for value in testSequences if value <= numWords]
-  X_test = pad_sequences(testData, maxlen=seqLen).astype(dType)
-  
-  return X_train, Y_train, X_val, Y_val, X_test, Y_test, wordIndex
+	# Use dictionary of mappings from training to convert to sequences
+	wordIndex = tokenizer.word_index
+	# Loop over strings in list
+	for ind, string in enumerate(testData):
+		testSequences = text_to_word_sequence(string)
+		# Loop over words in string
+		for idx, word in enumerate(testSequences):
+			testSequences[idx] = wordIndex.get(testSequences[idx], numWords + 1)
+		testData[ind] = [value for value in testSequences if value <= numWords]
+	X_test = pad_sequences(testData, maxlen=seqLen).astype(dType)
 
-def loadEmbeddings (dirPath, wordIndex, numWords):
+	return X_train, Y_train, X_val, Y_val, X_test, Y_test, wordIndex
+
+
+def loadEmbeddings(dirPath, wordIndex, numWords):
 	'''
 	Load the GloVe 6B 100-dimensional embeddings from its directory.
 
@@ -119,23 +123,35 @@ def loadEmbeddings (dirPath, wordIndex, numWords):
 	# Indexing of the embedding set from its words to embedding vectors
 	index = {}
 
-	f = open(os.path.join(dirPath, 'glove.6B.100d.txt'))
+	f = open(os.path.join(dirPath, 'glove.6B.100d.txt'), encoding="utf8")
 	for line in f:
 		values = line.split()
 		word = values[0]
-		coeffs = np.asarray(values[1:], dtype='float32')
-		index[word] = coeffs
+		coefficients = np.asarray(values[1:], dtype='float32')
+		index[word] = coefficients
 	f.close()
 
 	# Initialize to the right size
 	numWordsActual = min(numWords, len(wordIndex))
 	embeddingMatrix = np.zeros((numWordsActual + 1, 100))
 	for word, i in wordIndex.items():
-			if i > numWords:
-				continue
-			embeddingVector = index.get(word)
-			if embeddingVector is not None:
-				# Use zero initialization for words not found
-				embeddingMatrix[i] = embeddingVector
-				  
+		if i > numWords:
+			continue
+		embeddingVector = index.get(word)
+		if embeddingVector is not None:
+			# Use zero initialization for words not found
+			embeddingMatrix[i] = embeddingVector
+
 	return embeddingMatrix, numWordsActual
+
+
+def visualizeLayerOutput(model, layerNum = 3):
+	# Displays the selected input in visual form and
+	# outputs of the output layer for a single input with a given input in both
+	# pictorial and numerical form
+
+	getFunction = K.eval(model.layers[layerNum].function)
+	# print(np.shape(getFunction))
+	output_image = np.array(getFunction)
+	plt.imshow(output_image, cmap='gray')
+	plt.show()
