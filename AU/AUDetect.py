@@ -1,12 +1,16 @@
 from __future__ import print_function
+import sys
+sys.path.append('..')
 from keras.layers import Dense, Flatten
 from keras.optimizers import Adam
 from keras.models import Model
 from keras_vggface.vggface import VGGFace
-from AUDetectDataUtils import getCKData
+from keras import metrics
+from layer import Target2D
+from AUDetectDataUtils import getCKData, visualizeLayerOutput
 
 batchSize = 16
-numEpoch = 20
+numEpoch = 1
 nb_classes = 17
 
 # Load and check data
@@ -20,12 +24,12 @@ print ('Test labels shape: ', y_test.shape)
 
 # Baseline model
 base = VGGFace(include_top=False, input_shape=(224, 224, 3), pooling='None')
-last_layer = base.get_layer('pool5').output
-x = Flatten(name='flatten1')(last_layer)
-x = Dense(1024, activation='relu', name='fc6')(x)
+x = base.get_layer('pool5').output
+x = Target2D(attention_function='cauchy')(x)
+x = Flatten(name='flatten1')(x)
+x = Dense(256, activation='relu', name='fc6')(x)
 out = Dense(nb_classes, activation='sigmoid', name='fc7')(x)
 model = Model(base.input, out)
-model.summary()
 
 # Freezing pretrained layers
 for layer in model.layers[:19]:
@@ -33,13 +37,15 @@ for layer in model.layers[:19]:
 for layer in model.layers[19:]:
    layer.trainable = True
 
+model.summary()
+
 # Optimizer
 adam = Adam(lr= 0.001, beta_1= 0.9, beta_2= 0.999, epsilon= 1e-08, decay= 0.0)
 
 # Compile and train
 model.compile(loss='binary_crossentropy',
               optimizer=adam,
-              metrics=['accuracy'])
+              metrics=[metrics.binary_accuracy])
 
 model.fit(X_train, y_train,
 	batch_size=batchSize,
@@ -47,8 +53,11 @@ model.fit(X_train, y_train,
 	validation_data=(X_val, y_val),
 	shuffle=True)
 
+visualizeLayerOutput(model)
+
 # Check performance on test data
 preds = model.predict(X_test)
 preds[preds>=0.5] = 1
 preds[preds<0.5] = 0
 print(preds - y_test)
+print(metrics.binary_accuracy(y_test, int(preds)))
