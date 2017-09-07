@@ -7,7 +7,6 @@ def getCKData(num_training=493, num_validation=50, num_test=50):
 
     dataFile = h5py.File('ckplus_faces.hdf5', 'r')
 
-    print("Keys: %s" % dataFile.keys())
     keys = list(dataFile.keys())
     images = dataFile[keys[0]]
     images = np.array(images).astype(np.uint8)
@@ -16,11 +15,10 @@ def getCKData(num_training=493, num_validation=50, num_test=50):
 
     labelFile = h5py.File('FACS_labels_reduced.h5', 'r')
 
-    print("Keys: %s" % labelFile.keys())
     keys = list(labelFile.keys())
     labels = labelFile[keys[0]]
 
-    # Subsample the data
+    # Split the data
     mask = range(num_training)
     X_train = images[mask]
     y_train = labels[mask]
@@ -31,9 +29,7 @@ def getCKData(num_training=493, num_validation=50, num_test=50):
     X_test = images[mask]
     y_test = labels[mask]
 
-    # Normalize the data: subtract the mean image
-
-
+    # Normalize the data: subtract the mean image and place in (0,1)
     X_train = X_train.astype('float32')
     X_val = X_val.astype('float32')
     X_test = X_test.astype('float32')
@@ -46,6 +42,5 @@ def getCKData(num_training=493, num_validation=50, num_test=50):
     X_train /= 255
     X_val /= 255
     X_test /= 255
-
 
     return X_train, y_train, X_val, y_val, X_test, y_test
