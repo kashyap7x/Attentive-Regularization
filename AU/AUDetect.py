@@ -3,6 +3,7 @@ import sys
 sys.path.append('..')
 from keras.layers import Dense, Flatten
 from keras.optimizers import Adam
+from keras import regularizers
 from keras.models import Model
 from keras_vggface.vggface import VGGFace
 from keras import metrics
@@ -25,7 +26,7 @@ print ('Test labels shape: ', y_test.shape)
 # Baseline model
 base = VGGFace(include_top=False, input_shape=(224, 224, 3), pooling='None')
 x = base.get_layer('pool5').output
-x = Target2D()(x)
+x = Target2D(attention_function='cauchy', sig1_regularizer=regularizers.l2(0.01), sig2_regularizer=regularizers.l2(0.01))(x)
 x = Flatten(name='flatten1')(x)
 x = Dense(256, activation='relu', name='fc6')(x)
 out = Dense(nb_classes, activation='sigmoid', name='fc7')(x)

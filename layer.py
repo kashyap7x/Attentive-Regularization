@@ -105,21 +105,6 @@ class Target1D(Layer):
             else:
                 self.function = tf.transpose(1 / (1 + ((self.numerator) / self.denominator) ** 2))
 
-        self.regularizers = []
-        if self.mu_regularizer:
-            self.mu_regularizer.set_param(self.mu)
-            self.regularizers.append(self.mu_regularizer)
-
-        if self.sig_regularizer:
-            self.sig_regularizer.set_param(self.sig)
-            self.regularizers.append(self.sig_regularizer)
-
-        self.constraints = {}
-        if self.mu_constraint:
-            self.constraints[self.mu] = self.mu_constraint
-        if self.sig_constraint:
-            self.constraints[self.sig] = self.sig_constraint
-
     def call(self, x, mask=None):
         return x * self.function
 
@@ -235,8 +220,12 @@ class Target2D(Layer):
 
             self.mu1 = tf.Variable(mu_init)
             self.sig1 = tf.Variable(sig_init)
+            if self.sig1_regularizer is not None:
+                self.add_loss(self.sig1_regularizer(self.sig1))
             self.mu2 = tf.Variable(mu_init)
             self.sig2 = tf.Variable(sig_init)
+            if self.sig2_regularizer is not None:
+                self.add_loss(self.sig2_regularizer(self.sig2))
             self.trainable_weights = [self.mu1, self.sig1, self.mu2, self.sig2]
 
             self.base = tf.Variable(base)
@@ -278,33 +267,6 @@ class Target2D(Layer):
                         (1, 1, input_length,)), perm=[2, 1, 0])
 
             self.function = self.function1 * self.function2
-
-        self.regularizers = []
-        if self.mu1_regularizer:
-            self.mu1_regularizer.set_param(self.mu1)
-            self.regularizers.append(self.mu1_regularizer)
-
-        if self.sig1_regularizer:
-            self.sig1_regularizer.set_param(self.sig1)
-            self.regularizers.append(self.sig1_regularizer)
-
-        if self.mu2_regularizer:
-            self.mu2_regularizer.set_param(self.mu2)
-            self.regularizers.append(self.mu2_regularizer)
-
-        if self.sig2_regularizer:
-            self.sig2_regularizer.set_param(self.sig2)
-            self.regularizers.append(self.sig2_regularizer)
-
-        self.constraints = {}
-        if self.mu1_constraint:
-            self.constraints[self.mu1] = self.mu1_constraint
-        if self.sig1_constraint:
-            self.constraints[self.sig1] = self.sig1_constraint
-        if self.mu2_constraint:
-            self.constraints[self.mu2] = self.mu2_constraint
-        if self.sig2_constraint:
-            self.constraints[self.sig2] = self.sig2_constraint
 
     def call(self, x, mask=None):
         return x * self.function
