@@ -51,10 +51,8 @@ def getCKData(num_training=493, num_validation=50, num_test=50):
 
 
 def make_mosaic(imgs, nrows, ncols, border=1):
-	"""
-	Given a set of images with all the same shape, makes a
-	mosaic with nrows and ncols
-	"""
+	# Given a set of images with all the same shape, makes a
+	# mosaic with nrows and ncols
 	nimgs = imgs.shape[0]
 	imshape = imgs.shape[1:]
 
@@ -64,7 +62,7 @@ def make_mosaic(imgs, nrows, ncols, border=1):
 
 	paddedh = imshape[0] + border
 	paddedw = imshape[1] + border
-	for i in xrange(nimgs):
+	for i in range(nimgs):
 		row = int(np.floor(i / ncols))
 		col = i % ncols
 
@@ -73,7 +71,7 @@ def make_mosaic(imgs, nrows, ncols, border=1):
 	return mosaic
 
 def nice_imshow(ax, data, vmin=None, vmax=None, cmap=None):
-	"""Wrapper around plt.imshow"""
+	# Wrapper around plt.imshow
 	if cmap is None:
 		cmap = cm.jet
 	if vmin is None:
@@ -84,6 +82,7 @@ def nice_imshow(ax, data, vmin=None, vmax=None, cmap=None):
 	cax = divider.append_axes("right", size="5%", pad=0.05)
 	im = ax.imshow(data, vmin=vmin, vmax=vmax, interpolation='nearest', cmap=cmap)
 	plt.colorbar(im, cax=cax)
+	plt.show()
 
 def visualizeLayerOutput(model, layerNum = 19):
 	# Displays the selected input in visual form and
@@ -91,11 +90,9 @@ def visualizeLayerOutput(model, layerNum = 19):
 	# pictorial and numerical form
 
 	getFunction = K.eval(model.layers[layerNum].function)
-	# print(np.shape(getFunction))
 	output_image = np.array(getFunction)
 	output_image = np.squeeze(output_image)
-	print("Output shape : ", output_image.shape)
-
-	plt.figure(figsize=(32, 16))
+	output_image = np.transpose(output_image, (2, 1, 0))
+	plt.figure(figsize=(16, 32))
 	plt.title('Target2D')
-	nice_imshow(plt.gca(), make_mosaic(output_image, 32, 16), cmap=cm.binary)
+	nice_imshow(plt.gca(), make_mosaic(output_image, 16, 32), cmap=cm.binary)

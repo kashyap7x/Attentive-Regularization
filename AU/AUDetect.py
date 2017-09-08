@@ -9,8 +9,8 @@ from keras import metrics
 from layer import Target2D
 from AUDetectDataUtils import getCKData, visualizeLayerOutput
 
-batchSize = 16
-numEpoch = 1
+batchSize = 8
+numEpoch = 5
 nb_classes = 17
 
 # Load and check data
@@ -25,16 +25,16 @@ print ('Test labels shape: ', y_test.shape)
 # Baseline model
 base = VGGFace(include_top=False, input_shape=(224, 224, 3), pooling='None')
 x = base.get_layer('pool5').output
-x = Target2D(attention_function='cauchy')(x)
+x = Target2D()(x)
 x = Flatten(name='flatten1')(x)
 x = Dense(256, activation='relu', name='fc6')(x)
 out = Dense(nb_classes, activation='sigmoid', name='fc7')(x)
 model = Model(base.input, out)
 
 # Freezing pretrained layers
-for layer in model.layers[:19]:
+for layer in model.layers[:18]:
    layer.trainable = False
-for layer in model.layers[19:]:
+for layer in model.layers[18:]:
    layer.trainable = True
 
 model.summary()
@@ -57,7 +57,7 @@ visualizeLayerOutput(model)
 
 # Check performance on test data
 preds = model.predict(X_test)
-preds[preds>=0.5] = 1
-preds[preds<0.5] = 0
+preds[preds>=0.5] = int(1)
+preds[preds<0.5] = int(0)
 print(preds - y_test)
-print(metrics.binary_accuracy(y_test, int(preds)))
+print(metrics.binary_accuracy(y_test, preds))
