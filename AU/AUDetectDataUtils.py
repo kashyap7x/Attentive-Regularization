@@ -84,7 +84,7 @@ def nice_imshow(ax, data, vmin=None, vmax=None, cmap=None):
 	plt.colorbar(im, cax=cax)
 	plt.show()
 
-def visualizeLayerOutput(model, layerNum = 19):
+def visualizeLayerOutput(model, layerNum = 10):
 	# Displays the selected input in visual form and
 	# outputs of the output layer for a single input with a given input in both
 	# pictorial and numerical form
@@ -93,6 +93,6 @@ def visualizeLayerOutput(model, layerNum = 19):
 	output_image = np.array(getFunction)
 	output_image = np.squeeze(output_image)
 	output_image = np.transpose(output_image, (2, 1, 0))
-	plt.figure(figsize=(16, 32))
+	plt.figure(figsize=(20, 20))
 	plt.title('Target2D')
-	nice_imshow(plt.gca(), make_mosaic(output_image, 16, 32), cmap=cm.binary)
+	nice_imshow(plt.gca(), make_mosaic(output_image, 16, 16), cmap=cm.binary)

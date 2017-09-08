@@ -1,7 +1,7 @@
 from __future__ import print_function
 import sys
 sys.path.append('..')
-from keras.layers import Dense, Flatten
+from keras.layers import Dense, Flatten, Dropout, Input
 from keras.optimizers import Adam
 from keras import regularizers
 from keras.models import Model
@@ -9,9 +9,10 @@ from keras_vggface.vggface import VGGFace
 from keras import metrics
 from layer import Target2D
 from AUDetectDataUtils import getCKData, visualizeLayerOutput
+from sklearn.metrics import precision_recall_fscore_support
 
 batchSize = 8
-numEpoch = 5
+numEpoch = 10
 nb_classes = 17
 
 # Load and check data
@@ -25,17 +26,33 @@ print ('Test labels shape: ', y_test.shape)
 
 # Baseline model
 base = VGGFace(include_top=False, input_shape=(224, 224, 3), pooling='None')
-x = base.get_layer('pool5').output
-x = Target2D(attention_function='cauchy', sig1_regularizer=regularizers.l2(0.01), sig2_regularizer=regularizers.l2(0.01))(x)
+x = base.get_layer('conv3_3').output
+filt = Target2D(attention_function='cauchy', sig1_regularizer=regularizers.l2(0.01), sig2_regularizer=regularizers.l2(0.01))(x)
+x = base.get_layer('pool3')(filt)
+x = base.get_layer('conv4_1')(x)
+x = base.get_layer('conv4_2')(x)
+x = base.get_layer('conv4_3')(x)
+x = base.get_layer('pool4')(x)
+x = base.get_layer('conv5_1')(x)
+x = base.get_layer('conv5_2')(x)
+x = base.get_layer('conv5_3')(x)
+x = base.get_layer('pool5')(x)
 x = Flatten(name='flatten1')(x)
 x = Dense(256, activation='relu', name='fc6')(x)
+x = Dropout(0.5)(x)
 out = Dense(nb_classes, activation='sigmoid', name='fc7')(x)
 model = Model(base.input, out)
 
+# model = Model(inputs=base.input, outputs=bothalf(tophalf.output))
+
 # Freezing pretrained layers
-for layer in model.layers[:18]:
+for layer in model.layers[:10]:
    layer.trainable = False
-for layer in model.layers[18:]:
+for layer in model.layers[10:11]:
+   layer.trainable = True
+for layer in model.layers[11:19]:
+   layer.trainable = False
+for layer in model.layers[19:]:
    layer.trainable = True
 
 model.summary()
@@ -60,5 +77,5 @@ visualizeLayerOutput(model)
 preds = model.predict(X_test)
 preds[preds>=0.5] = int(1)
 preds[preds<0.5] = int(0)
-print(preds - y_test)
-print(metrics.binary_accuracy(y_test, preds))
+print(precision_recall_fscore_support(y_test, preds))
+print(precision_recall_fscore_support(y_test, preds, average='micro'))
