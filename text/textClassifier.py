@@ -7,12 +7,13 @@ Embeddings - http://nlp.stanford.edu/data/glove.6B.zip
 '''
 
 from __future__ import print_function
-from textClassifierDataUtils import load20NewsData, loadEmbeddings, visualizeLayerOutput
+from textClassifierDataUtils import load20NewsData, loadEmbeddings
 import sys
 sys.path.append('..')
 import numpy as np
 import matplotlib.pyplot as plt
 from layer import Target1D
+from visualization import visualizeLayerOutput1D
 from keras.models import Model
 from keras.layers import Dense, Dropout, Input, Flatten, merge
 from keras.layers import Conv1D, MaxPooling1D, Embedding
@@ -73,9 +74,8 @@ model.compile(loss='categorical_crossentropy',
               optimizer=adam,
               metrics=['accuracy'])
 
-
 # Display the attention layer initialization
-visualizeLayerOutput(model)
+visualizeLayerOutput1D(model)
 
 model.fit(X_train, Y_train,
 	batch_size=batchSize,
@@ -86,6 +86,5 @@ model.fit(X_train, Y_train,
 # Evaluate test accuraccy
 print (model.evaluate(X_test, Y_test, batch_size=batchSize))
 
-
 # Display the attention layer final values
-visualizeLayerOutput(model)
+visualizeLayerOutput1D(model)

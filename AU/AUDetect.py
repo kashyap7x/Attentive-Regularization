@@ -8,11 +8,12 @@ from keras.models import Model
 from keras_vggface.vggface import VGGFace
 from keras import metrics
 from layer import Target2D
-from AUDetectDataUtils import getCKData, visualizeLayerOutput
+from visualization import visualizeLayerOutput
+from AUDetectDataUtils import getCKData
 from sklearn.metrics import precision_recall_fscore_support
 
-batchSize = 8
-numEpoch = 10
+batchSize = 16
+numEpoch = 30
 nb_classes = 17
 
 # Load and check data
@@ -26,16 +27,21 @@ print ('Test labels shape: ', y_test.shape)
 
 # Baseline model
 base = VGGFace(include_top=False, input_shape=(224, 224, 3), pooling='None')
-x = base.get_layer('conv3_3').output
-filt = Target2D(attention_function='cauchy', sig1_regularizer=regularizers.l2(0.01), sig2_regularizer=regularizers.l2(0.01))(x)
-x = base.get_layer('pool3')(filt)
-x = base.get_layer('conv4_1')(x)
+
+x = base.get_layer('conv4_1').output
+x = Target2D(attention_function='cauchy', sig1_regularizer=regularizers.l2(0.01), sig2_regularizer=regularizers.l2(0.01))(x)
 x = base.get_layer('conv4_2')(x)
+x = Target2D(attention_function='cauchy', sig1_regularizer=regularizers.l2(0.01), sig2_regularizer=regularizers.l2(0.01))(x)
 x = base.get_layer('conv4_3')(x)
+x = Target2D(attention_function='cauchy', sig1_regularizer=regularizers.l2(0.01), sig2_regularizer=regularizers.l2(0.01))(x)
 x = base.get_layer('pool4')(x)
 x = base.get_layer('conv5_1')(x)
+x = Target2D(attention_function='cauchy', sig1_regularizer=regularizers.l2(0.01), sig2_regularizer=regularizers.l2(0.01))(x)
 x = base.get_layer('conv5_2')(x)
+x = Target2D(attention_function='cauchy', sig1_regularizer=regularizers.l2(0.01), sig2_regularizer=regularizers.l2(0.01))(x)
 x = base.get_layer('conv5_3')(x)
+x = Target2D(attention_function='cauchy', sig1_regularizer=regularizers.l2(0.01), sig2_regularizer=regularizers.l2(0.01))(x)
+
 x = base.get_layer('pool5')(x)
 x = Flatten(name='flatten1')(x)
 x = Dense(256, activation='relu', name='fc6')(x)
@@ -46,15 +52,19 @@ model = Model(base.input, out)
 # model = Model(inputs=base.input, outputs=bothalf(tophalf.output))
 
 # Freezing pretrained layers
-for layer in model.layers[:10]:
+for layer in model.layers[:24]:
    layer.trainable = False
-for layer in model.layers[10:11]:
-   layer.trainable = True
-for layer in model.layers[11:19]:
-   layer.trainable = False
-for layer in model.layers[19:]:
+for layer in model.layers[24:]:
    layer.trainable = True
 
+model.layers[12].trainable = True
+model.layers[14].trainable = True
+model.layers[16].trainable = True
+model.layers[19].trainable = True
+model.layers[21].trainable = True
+model.layers[23].trainable = True
+
+visualizeLayerOutput(model, layerNum = 12)
 model.summary()
 
 # Optimizer
@@ -71,11 +81,15 @@ model.fit(X_train, y_train,
 	validation_data=(X_val, y_val),
 	shuffle=True)
 
-visualizeLayerOutput(model)
+visualizeLayerOutput(model, layerNum = 12)
+visualizeLayerOutput(model, layerNum = 14)
+visualizeLayerOutput(model, layerNum = 16)
+visualizeLayerOutput(model, layerNum = 19)
+visualizeLayerOutput(model, layerNum = 21)
+visualizeLayerOutput(model, layerNum = 23)
 
 # Check performance on test data
 preds = model.predict(X_test)
 preds[preds>=0.5] = int(1)
 preds[preds<0.5] = int(0)
-print(precision_recall_fscore_support(y_test, preds))
 print(precision_recall_fscore_support(y_test, preds, average='micro'))

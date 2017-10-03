@@ -2,12 +2,10 @@ from keras import regularizers, constraints
 from keras.engine import Layer, InputSpec
 from keras import backend as K
 import numpy as np
-
 if K.backend() == 'theano':
     import theano
 else:
     import tensorflow as tf
-
 
 class Target1D(Layer):
     '''
@@ -36,7 +34,6 @@ class Target1D(Layer):
 	'''
 
     def __init__(self, attention_function='gaussian',
-                 mu_constraint=None, sig_constraint=None,
                  mu_regularizer=None, sig_regularizer=None,
                  input_length=None, input_dim=None, **kwargs):
 
@@ -46,8 +43,6 @@ class Target1D(Layer):
 
         self.mu_regularizer = regularizers.get(mu_regularizer)
         self.sig_regularizer = regularizers.get(sig_regularizer)
-        self.mu_constraint = constraints.get(mu_constraint)
-        self.sig_constraint = constraints.get(sig_constraint)
 
         self.input_spec = [InputSpec(ndim=3)]
         self.input_dim = input_dim
@@ -69,6 +64,10 @@ class Target1D(Layer):
 
             self.mu = theano.shared(mu_init)
             self.sig = theano.shared(sig_init)
+            if self.mu_regularizer is not None:
+                self.add_loss(self.mu_regularizer(self.mu))
+            if self.sig_regularizer is not None:
+                self.add_loss(self.sig_regularizer(self.sig))
             self.trainable_weights = [self.mu, self.sig]
 
             self.base = theano.shared(base)
@@ -90,6 +89,10 @@ class Target1D(Layer):
 
             self.mu = tf.Variable(mu_init)
             self.sig = tf.Variable(sig_init)
+            if self.mu_regularizer is not None:
+                self.add_loss(self.mu_regularizer(self.mu))
+            if self.sig_regularizer is not None:
+                self.add_loss(self.sig_regularizer(self.sig))
             self.trainable_weights = [self.mu, self.sig]
 
             self.base = tf.Variable(base)
@@ -181,6 +184,14 @@ class Target2D(Layer):
             self.sig1 = theano.shared(sig_init)
             self.mu2 = theano.shared(mu_init)
             self.sig2 = theano.shared(sig_init)
+            if self.mu1_regularizer is not None:
+                self.add_loss(self.mu1_regularizer(self.mu1))
+            if self.sig1_regularizer is not None:
+                self.add_loss(self.sig1_regularizer(self.sig1))
+            if self.mu2_regularizer is not None:
+                self.add_loss(self.mu2_regularizer(self.mu2))
+            if self.sig2_regularizer is not None:
+                self.add_loss(self.sig2_regularizer(self.sig2))
             self.trainable_weights = [self.mu1, self.sig1, self.mu2, self.sig2]
 
             self.base = theano.shared(base)
@@ -206,8 +217,9 @@ class Target2D(Layer):
                                                 (input_length, 1, 1))
 
             if self.attention_function == 'gaussian':
-                self.function2 = theano.tensor.tile((K.exp(-(self.numerator2) ** 2. / (2 * (self.denominator2) ** 2))).T,
-                                                    (input_length, 1, 1))
+                self.function2 = theano.tensor.tile(
+                    (K.exp(-(self.numerator2) ** 2. / (2 * (self.denominator2) ** 2))).T,
+                    (input_length, 1, 1))
             else:
                 self.function2 = theano.tensor.tile((1 / (1 + ((self.numerator2) / self.denominator2) ** 2)).T,
                                                     (input_length, 1, 1))
@@ -220,10 +232,14 @@ class Target2D(Layer):
 
             self.mu1 = tf.Variable(mu_init)
             self.sig1 = tf.Variable(sig_init)
-            if self.sig1_regularizer is not None:
-                self.add_loss(self.sig1_regularizer(self.sig1))
             self.mu2 = tf.Variable(mu_init)
             self.sig2 = tf.Variable(sig_init)
+            if self.mu1_regularizer is not None:
+                self.add_loss(self.mu1_regularizer(self.mu1))
+            if self.sig1_regularizer is not None:
+                self.add_loss(self.sig1_regularizer(self.sig1))
+            if self.mu2_regularizer is not None:
+                self.add_loss(self.mu2_regularizer(self.mu2))
             if self.sig2_regularizer is not None:
                 self.add_loss(self.sig2_regularizer(self.sig2))
             self.trainable_weights = [self.mu1, self.sig1, self.mu2, self.sig2]
@@ -236,11 +252,11 @@ class Target2D(Layer):
             self.numerator1 = self.base - self.mu1_tiled * input_length
             self.denominator1 = self.sig1_tiled * input_length / 2
 
-
             if self.attention_function == 'gaussian':
                 self.function1 = tf.transpose(
                     tf.tile(
-                        tf.expand_dims(tf.transpose(K.exp(-(self.numerator1) ** 2. / (2 * (self.denominator1) ** 2))), 2),
+                        tf.expand_dims(tf.transpose(K.exp(-(self.numerator1) ** 2. / (2 * (self.denominator1) ** 2))),
+                                       2),
                         (1, 1, input_length)), perm=[0, 2, 1])
 
             else:
@@ -257,7 +273,8 @@ class Target2D(Layer):
             if self.attention_function == 'gaussian':
                 self.function2 = tf.transpose(
                     tf.tile(
-                        tf.expand_dims((tf.transpose(K.exp(-(self.numerator2) ** 2. / (2 * (self.denominator2) ** 2)))), 2),
+                        tf.expand_dims((tf.transpose(K.exp(-(self.numerator2) ** 2. / (2 * (self.denominator2) ** 2)))),
+                                       2),
                         (1, 1, input_length,)), perm=[2, 1, 0])
 
             else:

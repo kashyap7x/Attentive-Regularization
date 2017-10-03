@@ -1,13 +1,11 @@
 import os
 import numpy as np
 import sys
-
 from keras.preprocessing.text import Tokenizer, text_to_word_sequence
 from keras.preprocessing.sequence import pad_sequences
 from keras.utils.np_utils import to_categorical
 from keras import backend as K
 import matplotlib.pyplot as plt
-
 
 def loadTexts(dirPath):
 	'''
@@ -46,7 +44,6 @@ def loadTexts(dirPath):
 	# Convert class vector to class matrix
 	labels = to_categorical(np.asarray(labels))
 	return data, labels
-
 
 def load20NewsData(trainDir, testDir, numWords, seqLen, dType, valSplit):
 	'''
@@ -106,7 +103,6 @@ def load20NewsData(trainDir, testDir, numWords, seqLen, dType, valSplit):
 
 	return X_train, Y_train, X_val, Y_val, X_test, Y_test, wordIndex
 
-
 def loadEmbeddings(dirPath, wordIndex, numWords):
 	'''
 	Load the GloVe 6B 100-dimensional embeddings from its directory.
@@ -143,15 +139,3 @@ def loadEmbeddings(dirPath, wordIndex, numWords):
 			embeddingMatrix[i] = embeddingVector
 
 	return embeddingMatrix, numWordsActual
-
-
-def visualizeLayerOutput(model, layerNum = 3):
-	# Displays the selected input in visual form and
-	# outputs of the output layer for a single input with a given input in both
-	# pictorial and numerical form
-
-	getFunction = K.eval(model.layers[layerNum].function)
-	# print(np.shape(getFunction))
-	output_image = np.array(getFunction)
-	plt.imshow(output_image, cmap='gray')
-	plt.show()
