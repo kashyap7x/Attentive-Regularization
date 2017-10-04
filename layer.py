@@ -360,12 +360,12 @@ class Scale(Layer):
         base_config = super(Scale, self).get_config()
         return dict(list(base_config.items()) + list(config.items()))
 
-def DenseTarget2D(x, growth_rate, include_target = 'false', attention_function='cauchy', l2=0.01, target_buildup=1):
+def DenseTarget2D(x, growth_rate, include_target = 'false', attention_function='cauchy', l2=0.01):
     x = BatchNormalization()(x)
-    if include_target == 'true':
-        x = Target2D(attention_function=attention_function, sig1_regularizer=regularizers.l2(l2),sig2_regularizer=regularizers.l2(l2))(x)
     x = Scale()(x)
     x = Activation('relu')(x)
     y = Conv2D(growth_rate, kernel_size=(3, 3), padding='same', use_bias=False)(x)
+    if include_target == 'true':
+        y = Target2D(attention_function=attention_function, sig1_regularizer=regularizers.l2(l2),sig2_regularizer=regularizers.l2(l2))(y)
     x = Concatenate(axis=-1)([x, y])
     return x

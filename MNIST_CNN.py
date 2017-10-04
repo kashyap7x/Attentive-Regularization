@@ -6,6 +6,7 @@ from keras import backend as K
 from keras.models import Model
 from keras.optimizers import Adam
 from layer import Scale, Target2D, DenseTarget2D
+from visualization import *
 
 batch_size = 128
 num_classes = 10
@@ -38,18 +39,22 @@ print(x_test.shape[0], 'test samples')
 y_train = keras.utils.to_categorical(y_train, num_classes)
 y_test = keras.utils.to_categorical(y_test, num_classes)
 
-growth_rate=8
+growth_rate=16
+l2 = 0.001
+l2_buildup = 10
 
 input = Input(shape=input_shape)
-x = Conv2D(16, kernel_size=(3, 3), padding='same', use_bias=False)(input)
+x = Conv2D(32, kernel_size=(3, 3), padding='same', use_bias=False)(input)
 x = BatchNormalization()(x)
 x = Scale()(x)
 x = Activation('relu')(x)
 x = MaxPooling2D(pool_size=(2, 2))(x)
 
-x = DenseTarget2D(x, growth_rate)
-x = DenseTarget2D(x, growth_rate)
-x = DenseTarget2D(x, growth_rate)
+x = DenseTarget2D(x, growth_rate=growth_rate, include_target = 'true', l2=l2)
+l2 *= l2_buildup
+x = DenseTarget2D(x, growth_rate=growth_rate, include_target = 'true', l2=l2)
+l2 *= l2_buildup
+x = DenseTarget2D(x, growth_rate=growth_rate, include_target = 'true', l2=l2)
 
 x = BatchNormalization()(x)
 x = Scale()(x)
@@ -66,9 +71,16 @@ model.compile(loss=keras.losses.categorical_crossentropy,
               metrics=['accuracy'])
 
 # check the model
+
 model.summary()
+
 model.fit(x_train, y_train,
           batch_size=batch_size,
           epochs=epochs,
           verbose=1,
           validation_data=(x_test, y_test))
+
+# visualization of the gaussian filters
+visualizeLayerOutput(model, 10, 4, 4)
+visualizeLayerOutput(model, 16, 4, 4)
+visualizeLayerOutput(model, 22, 4, 4)
