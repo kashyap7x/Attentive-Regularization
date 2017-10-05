@@ -1,23 +1,20 @@
 from __future__ import print_function
 import keras
 from keras.datasets import mnist
-from keras.models import Sequential
-from keras.layers import Dense, Dropout, Flatten
-from keras.layers import Conv2D, MaxPooling2D
+from keras.layers import Dense, Conv2D, MaxPooling2D, GlobalAveragePooling2D, Input, BatchNormalization, Activation
 from keras import backend as K
 from keras import regularizers
 import sys
 sys.path.append('..')
-from layer import Target2D
+from layer import Scale, Target2D, DenseTarget2D
 from visualization import *
-
-from keras.layers import Concatenate, Input
 from keras.models import Model
+from keras.optimizers import Adam
 import h5py
 
-batch_size = 128
+batch_size = 512
 num_classes = 10
-epochs = 10
+epochs = 20
 
 # input image dimensions
 img_rows, img_cols = 28, 28
@@ -57,23 +54,35 @@ print(x_test.shape[0], 'test samples')
 y_train = keras.utils.to_categorical(y_train, num_classes)
 y_test = keras.utils.to_categorical(y_test, num_classes)
 
-model = Sequential()
-model.add(Conv2D(32, kernel_size=(3, 3),
-                 activation='relu',
-                 input_shape=input_shape))
-model.add(Conv2D(64, (3, 3), activation='relu'))
-model.add(Target2D(attention_function='cauchy',
-                   sig1_regularizer=regularizers.l2(0.01),
-                   sig2_regularizer=regularizers.l2(0.01)))
-model.add(MaxPooling2D(pool_size=(2, 2)))
-model.add(Dropout(0.25))
-model.add(Flatten())
-model.add(Dense(128, activation='relu'))
-model.add(Dropout(0.5))
-model.add(Dense(num_classes, activation='softmax'))
+growth_rate=16
+l2 = 0.01
+l2_buildup = 1
+
+input = Input(shape=input_shape)
+x = Conv2D(32, kernel_size=(3, 3), padding='same', use_bias=False)(input)
+x = BatchNormalization()(x)
+x = Scale()(x)
+x = Activation('relu')(x)
+x = MaxPooling2D(pool_size=(2, 2))(x)
+
+x = DenseTarget2D(x, growth_rate=growth_rate, include_target = 'true', l2=l2)
+l2 *= l2_buildup
+x = DenseTarget2D(x, growth_rate=growth_rate, include_target = 'true', l2=l2)
+l2 *= l2_buildup
+x = DenseTarget2D(x, growth_rate=growth_rate, include_target = 'true', l2=l2)
+
+x = BatchNormalization()(x)
+x = Scale()(x)
+x = Activation('relu')(x)
+x = GlobalAveragePooling2D()(x)
+out = Dense(num_classes, activation='softmax')(x)
+model = Model(input, out)
+
+# Optimizer
+adam = Adam(lr= 0.001, beta_1= 0.9, beta_2= 0.999, epsilon= 1e-08, decay= 0.0)
 
 model.compile(loss=keras.losses.categorical_crossentropy,
-              optimizer=keras.optimizers.Adadelta(),
+              optimizer=adam,
               metrics=['accuracy'])
 
 # check the model
@@ -89,4 +98,6 @@ print('Test loss:', score[0])
 print('Test accuracy:', score[1])
 
 # visualization of the gaussian filters
-visualizeLayerOutput(model, 2, 8, 8)
+visualizeLayerOutput(model, 10, 4, 4)
+visualizeLayerOutput(model, 16, 4, 4)
+visualizeLayerOutput(model, 22, 4, 4)
