@@ -1,16 +1,16 @@
 from __future__ import print_function
 import keras
 from keras.datasets import mnist
-from keras.layers import Dense, Conv2D, MaxPooling2D, GlobalAveragePooling2D, Concatenate, Input, BatchNormalization, Activation
+from keras.layers import Dense, Conv2D, Concatenate, MaxPooling2D, GlobalAveragePooling2D, Input, BatchNormalization, Activation
 from keras import backend as K
 from keras.models import Model
 from keras.optimizers import Adam
-from layer import Scale, Target2D, DenseTarget2D
+from denseBlocks import DenseTarget2D
 from visualization import *
 
 batch_size = 128
 num_classes = 10
-epochs = 30
+epochs = 20
 
 # input image dimensions
 img_rows, img_cols = 28, 28
@@ -41,23 +41,26 @@ y_test = keras.utils.to_categorical(y_test, num_classes)
 
 growth_rate=16
 l2 = 0.001
-l2_buildup = 10
+l2_buildup = 2
 
 input = Input(shape=input_shape)
 x = Conv2D(32, kernel_size=(3, 3), padding='same', use_bias=False)(input)
 x = BatchNormalization()(x)
-x = Scale()(x)
 x = Activation('relu')(x)
 x = MaxPooling2D(pool_size=(2, 2))(x)
 
-x = DenseTarget2D(x, growth_rate=growth_rate, include_target = 'true', l2=l2)
+y = DenseTarget2D(x, growth_rate=growth_rate, include_target = 'true', l2=l2)
+x = Concatenate(axis=-1)([x, y])
 l2 *= l2_buildup
-x = DenseTarget2D(x, growth_rate=growth_rate, include_target = 'true', l2=l2)
+
+y = DenseTarget2D(x, growth_rate=growth_rate, include_target = 'true', l2=l2)
+x = Concatenate(axis=-1)([x, y])
 l2 *= l2_buildup
-x = DenseTarget2D(x, growth_rate=growth_rate, include_target = 'true', l2=l2)
+
+y = DenseTarget2D(x, growth_rate=growth_rate, include_target = 'true', l2=l2)
+x = Concatenate(axis=-1)([x, y])
 
 x = BatchNormalization()(x)
-x = Scale()(x)
 x = Activation('relu')(x)
 x = GlobalAveragePooling2D()(x)
 out = Dense(num_classes, activation='softmax')(x)
