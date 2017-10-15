@@ -10,9 +10,9 @@ import scipy.io as sio
 import numpy as np
 import h5py
 
-batch_size = 32
+batch_size = 64
 num_classes = 10
-epochs = 30
+epochs = 5
 
 svhnTrain = sio.loadmat('train_32x32.mat')
 svhnTest = sio.loadmat('test_32x32.mat')
