@@ -40,8 +40,8 @@ y_train = keras.utils.to_categorical(y_train, num_classes)
 y_test = keras.utils.to_categorical(y_test, num_classes)
 
 growth_rate=16
-l2 = 0.001
-l2_buildup = 2
+l2 = 0.01
+l2_buildup = 1
 
 input = Input(shape=input_shape)
 x = Conv2D(32, kernel_size=(3, 3), padding='same', use_bias=False)(input)

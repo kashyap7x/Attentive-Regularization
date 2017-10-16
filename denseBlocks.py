@@ -36,10 +36,10 @@ def DenseNet(nb_dense_block = 3, growth_rate=48, reduction=0.5, dropout_rate=0.0
 
     # From architecture for ImageNet (Table 1 in the paper)
     nb_filter = growth_rate * 2
-    nb_layers = [12,12,12]
+    nb_layers = [6,6,6]
 
     # Initial convolution
-    x = Conv2D(32, kernel_size=(3, 3), padding='same', use_bias=False)(img_input)
+    x = Conv2D(nb_filter, kernel_size=(3, 3), padding='same', use_bias=False)(img_input)
 
     # Add dense blocks
     for block_idx in range(nb_dense_block - 1):
