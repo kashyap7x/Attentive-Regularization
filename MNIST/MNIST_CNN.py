@@ -1,16 +1,26 @@
 from __future__ import print_function
+import sys
+sys.path.append('..')
 import keras
 from keras.datasets import mnist
 from keras.layers import Dense, Conv2D, Concatenate, MaxPooling2D, GlobalAveragePooling2D, Input, BatchNormalization, Activation
 from keras import backend as K
 from keras.models import Model
-from keras.optimizers import Adam
+from keras.optimizers import Adam, SGD
 from denseBlocks import DenseTarget2D
 from visualization import *
+from keras.callbacks import LearningRateScheduler, CSVLogger, ModelCheckpoint
 
 batch_size = 128
 num_classes = 10
 epochs = 20
+
+def scheduler(epoch):
+    if epoch==10 or epoch==15:
+        lr = K.get_value(model.optimizer.lr)
+        K.set_value(model.optimizer.lr, lr*.1)
+        print("lr changed to {}".format(lr*.1))
+    return K.get_value(model.optimizer.lr)
 
 # input image dimensions
 img_rows, img_cols = 28, 28
@@ -39,8 +49,8 @@ print(x_test.shape[0], 'test samples')
 y_train = keras.utils.to_categorical(y_train, num_classes)
 y_test = keras.utils.to_categorical(y_test, num_classes)
 
-growth_rate=16
-l2 = 0.01
+growth_rate=24
+l2 = 0.001
 l2_buildup = 1
 
 input = Input(shape=input_shape)
@@ -67,23 +77,30 @@ out = Dense(num_classes, activation='softmax')(x)
 model = Model(input, out)
 
 # Optimizer
-adam = Adam(lr= 0.001, beta_1= 0.9, beta_2= 0.999, epsilon= 1e-08, decay= 0.0)
+#adam = Adam(lr= 0.001, beta_1= 0.9, beta_2= 0.999, epsilon= 1e-08, decay= 0.0)
+sgd = SGD(lr=0.1, momentum=0.9, decay=0.0001, nesterov=True)
 
 model.compile(loss=keras.losses.categorical_crossentropy,
-              optimizer=adam,
+              optimizer=sgd,
               metrics=['accuracy'])
 
 # check the model
 
 model.summary()
 
+lr_decay = LearningRateScheduler(scheduler)
+csv_logger = CSVLogger('MNIST_train.log')
+checkpoint = ModelCheckpoint(filepath='MNIST_weights.hdf5', monitor='val_acc', verbose=0, save_best_only=True, mode='max')
+callbacks_list = [lr_decay, csv_logger, checkpoint]
+
 model.fit(x_train, y_train,
           batch_size=batch_size,
           epochs=epochs,
           verbose=1,
+          callbacks=callbacks_list,
           validation_data=(x_test, y_test))
 
 # visualization of the gaussian filters
-visualizeLayerOutput(model, 10, 4, 4)
-visualizeLayerOutput(model, 16, 4, 4)
-visualizeLayerOutput(model, 22, 4, 4)
+visualizeLayerOutput(model, 8, 6, 4)
+visualizeLayerOutput(model, 13, 6, 4)
+visualizeLayerOutput(model, 18, 6, 4)

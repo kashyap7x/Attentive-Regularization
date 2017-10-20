@@ -4,7 +4,7 @@ from keras import backend as K
 import numpy as np
 from numpy.random import permutation
 from numpy.random import uniform
-
+np.random.seed(1337)
 import h5py
 import cv2
 
