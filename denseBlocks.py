@@ -1,6 +1,6 @@
 from __future__ import print_function
 import keras
-from keras.layers import Dense, Conv2D, MaxPooling2D, GlobalAveragePooling2D, Concatenate, Input, BatchNormalization, Activation, AveragePooling2D, Add, Dropout, Flatten
+from keras.layers import Dense, Conv2D, MaxPooling2D, GlobalAveragePooling2D, Concatenate, Input, BatchNormalization, Activation, AveragePooling2D, Add, Dropout, Flatten, Lambda
 from keras import regularizers, constraints
 from keras import backend as K
 from layer import Target2D
@@ -39,7 +39,8 @@ def DenseNet(nb_dense_block = 3, growth_rate=48, reduction=0.5, dropout_rate=0.0
     nb_layers = [6,6,6]
 
     # Initial convolution
-    x = Conv2D(nb_filter, kernel_size=(3, 3), padding='same', use_bias=False)(img_input)
+    x = Lambda(lambda x: x / 255)(img_input)
+    x = Conv2D(nb_filter, kernel_size=(3, 3), padding='same', use_bias=False)(x)
 
     # Add dense blocks
     for block_idx in range(nb_dense_block - 1):
@@ -237,7 +238,8 @@ def wideResNet(k, dropout, include_target='false', l2=0.01, l2_buildup = 1):
     else:
         bn_axis = 1
 
-    x = Conv2D(16 * k, (3, 3), padding='same')(img_input)
+    x = Lambda(lambda x: x / 255)(img_input)
+    x = Conv2D(16 * k, (3, 3), padding='same')(x)
 
     x = conv_block_resnet(x, [16 * k, 16 * k], strides=(1, 1), dropout=dropout, include_target = include_target, l2 = l2, l2_buildup = l2_buildup)
     x = identity_block(x, [16 * k, 16 * k], dropout=dropout, include_target = include_target, l2 = l2, l2_buildup = l2_buildup)
