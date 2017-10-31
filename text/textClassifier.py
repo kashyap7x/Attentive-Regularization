@@ -12,7 +12,7 @@ import sys
 sys.path.append('..')
 import numpy as np
 import matplotlib.pyplot as plt
-from layer import Target1D
+from layer import AR1D
 from visualization import visualizeLayerOutput1D
 from keras.models import Model
 from keras.layers import Dense, Dropout, Input, Flatten, merge
@@ -56,7 +56,7 @@ embeddingLayer = Embedding(numWordsActual + 1,
 inputSequences = Input(shape=(seqLen,), dtype='int32')
 embeddedVectors = embeddingLayer(inputSequences)
 x = Conv1D(256, 3, activation='relu', border_mode='same')(embeddedVectors)
-x = Target1D(attention_function='cauchy')(x)
+x = AR1D(attention_function='cauchy')(x)
 x = MaxPooling1D(seqLen)(x)
 x = Dropout(0.5)(x)
 x = Flatten()(x)

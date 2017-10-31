@@ -5,7 +5,7 @@ import keras
 from keras.optimizers import Adam, SGD
 from keras.layers import Dense, Conv2D, Concatenate, MaxPooling2D, GlobalAveragePooling2D, Input, BatchNormalization, Activation
 from keras.models import Model
-from keras.preprocessing.image import ImageDataGenerator
+#from keras.preprocessing.image import ImageDataGenerator
 from keras.callbacks import LearningRateScheduler, CSVLogger, ModelCheckpoint
 from denseBlocks import DenseTarget2D
 from denseBlocks import DenseNet, wideResNet
@@ -14,10 +14,10 @@ from visualization import *
 np.random.seed(1337)
 
 batch_size = 64
-epochs = 40
+epochs = 20
 
 def scheduler(epoch):
-    if epoch==20 or epoch==30:
+    if epoch==10 or epoch==15:
         lr = K.get_value(model.optimizer.lr)
         K.set_value(model.optimizer.lr, lr*.1)
         print("lr changed to {}".format(lr*.1))
@@ -31,7 +31,7 @@ model = DenseNet(growth_rate=12, reduction=0.5, dropout_rate=0, include_target='
 
 # Optimizer
 # adam = Adam(lr= 0.01, beta_1= 0.9, beta_2= 0.999, epsilon= 1e-08, decay= 0.0)
-sgd = SGD(lr=0.1, momentum=0.9, decay=0.0001, nesterov=True)
+sgd = SGD(lr=0.1, momentum=0.9, nesterov=True)
 
 model.compile(loss=keras.losses.categorical_crossentropy,
               optimizer=sgd,

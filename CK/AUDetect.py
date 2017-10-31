@@ -7,13 +7,13 @@ from keras import regularizers
 from keras.models import Model
 from keras_vggface.vggface import VGGFace
 from keras import metrics
-from layer import Target2D
+from layer import AR2D
 from visualization import visualizeLayerOutput
 from AUDetectDataUtils import getCKData
 from sklearn.metrics import precision_recall_fscore_support
 
 batchSize = 16
-numEpoch = 30
+numEpoch = 40
 nb_classes = 17
 
 # Load and check data
@@ -29,18 +29,18 @@ print ('Test labels shape: ', y_test.shape)
 base = VGGFace(include_top=False, input_shape=(224, 224, 3), pooling='None')
 
 x = base.get_layer('conv4_1').output
-x = Target2D(attention_function='cauchy', sig1_regularizer=regularizers.l2(0.01), sig2_regularizer=regularizers.l2(0.01))(x)
+x = AR2D(attention_function='cauchy', sig1_regularizer=regularizers.l2(0.01), sig2_regularizer=regularizers.l2(0.01))(x)
 x = base.get_layer('conv4_2')(x)
-x = Target2D(attention_function='cauchy', sig1_regularizer=regularizers.l2(0.01), sig2_regularizer=regularizers.l2(0.01))(x)
+x = AR2D(attention_function='cauchy', sig1_regularizer=regularizers.l2(0.01), sig2_regularizer=regularizers.l2(0.01))(x)
 x = base.get_layer('conv4_3')(x)
-x = Target2D(attention_function='cauchy', sig1_regularizer=regularizers.l2(0.01), sig2_regularizer=regularizers.l2(0.01))(x)
+x = AR2D(attention_function='cauchy', sig1_regularizer=regularizers.l2(0.01), sig2_regularizer=regularizers.l2(0.01))(x)
 x = base.get_layer('pool4')(x)
 x = base.get_layer('conv5_1')(x)
-x = Target2D(attention_function='cauchy', sig1_regularizer=regularizers.l2(0.01), sig2_regularizer=regularizers.l2(0.01))(x)
+x = AR2D(attention_function='cauchy', sig1_regularizer=regularizers.l2(0.01), sig2_regularizer=regularizers.l2(0.01))(x)
 x = base.get_layer('conv5_2')(x)
-x = Target2D(attention_function='cauchy', sig1_regularizer=regularizers.l2(0.01), sig2_regularizer=regularizers.l2(0.01))(x)
+x = AR2D(attention_function='cauchy', sig1_regularizer=regularizers.l2(0.01), sig2_regularizer=regularizers.l2(0.01))(x)
 x = base.get_layer('conv5_3')(x)
-x = Target2D(attention_function='cauchy', sig1_regularizer=regularizers.l2(0.01), sig2_regularizer=regularizers.l2(0.01))(x)
+x = AR2D(attention_function='cauchy', sig1_regularizer=regularizers.l2(0.01), sig2_regularizer=regularizers.l2(0.01))(x)
 
 x = base.get_layer('pool5')(x)
 x = Flatten(name='flatten1')(x)
@@ -64,7 +64,6 @@ model.layers[19].trainable = True
 model.layers[21].trainable = True
 model.layers[23].trainable = True
 
-visualizeLayerOutput(model, layerNum = 12)
 model.summary()
 
 # Optimizer

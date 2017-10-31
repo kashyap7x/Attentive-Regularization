@@ -3,10 +3,21 @@ import keras
 from keras.layers import Dense, Conv2D, MaxPooling2D, GlobalAveragePooling2D, Concatenate, Input, BatchNormalization, Activation, AveragePooling2D, Add, Dropout, Flatten, Lambda
 from keras import regularizers, constraints
 from keras import backend as K
-from layer import Target2D
+from layer import AR2D, Target2D
 from keras.models import Model
 
-def DenseNet(nb_dense_block = 3, growth_rate=48, reduction=0.5, dropout_rate=0.0, weight_decay=1e-4, classes=10, include_target='false', l2=0.01, l2_buildup = 1, weights_path=None):
+def DenseTarget2D(x, growth_rate, weight_decay=1e-4, include_target = 'false', attention_function='cauchy', l2=0.01, use_bias=False):
+    x = BatchNormalization()(x)
+    x = Activation('relu')(x)
+    if include_target == 'false':
+        x = Conv2D(growth_rate, kernel_size=(3, 3), kernel_initializer='he_normal', padding='same', use_bias=False,kernel_regularizer=regularizers.l2(weight_decay))(x)
+    elif include_target == 'preslice':
+        x = Target2D(growth_rate, kernel_size=(3, 3), kernel_initializer='he_normal', padding='same', use_bias=False, preslice=True, kernel_regularizer=regularizers.l2(weight_decay), attention_function=attention_function, sig1_regularizer=regularizers.l2(l2),sig2_regularizer=regularizers.l2(l2))(x)
+    else:
+        x = Target2D(growth_rate, kernel_size=(3, 3), kernel_initializer='he_normal', padding='same', use_bias=False,kernel_regularizer=regularizers.l2(weight_decay), attention_function=attention_function, sig1_regularizer=regularizers.l2(l2),sig2_regularizer=regularizers.l2(l2))(x)
+    return x
+
+def DenseNet(in_shape=(32, 32, 3), nb_dense_block = 3, lay_per_block = 6, growth_rate=48, reduction=0.5, dropout_rate=0.0, weight_decay=1e-4, classes=10, include_target='false', l2=0.01, l2_buildup = 1, weights_path=None):
     '''Instantiate the DenseNet 121 architecture,
         # Arguments
             nb_dense_block: number of dense blocks to add to end
@@ -27,20 +38,16 @@ def DenseNet(nb_dense_block = 3, growth_rate=48, reduction=0.5, dropout_rate=0.0
 
     # Handle Dimension Ordering for different backends
     global concat_axis
-    if K.image_dim_ordering() == 'tf':
-      concat_axis = 3
-      img_input = Input(shape=(32, 32, 3))
-    else:
-      concat_axis = 1
-      img_input = Input(shape=(3, 32, 32))
+    concat_axis = 3
+    img_input = Input(shape=in_shape)
 
     # From architecture for ImageNet (Table 1 in the paper)
     nb_filter = growth_rate * 2
-    nb_layers = [6,6,6]
+    nb_layers = [lay_per_block,lay_per_block,lay_per_block]
 
     # Initial convolution
     x = Lambda(lambda x: x / 255)(img_input)
-    x = Conv2D(nb_filter, kernel_size=(3, 3), padding='same', use_bias=False)(x)
+    x = Conv2D(nb_filter, kernel_size=(3, 3), kernel_initializer='he_normal', padding='same', use_bias=False,kernel_regularizer=regularizers.l2(weight_decay))(x)
 
     # Add dense blocks
     for block_idx in range(nb_dense_block - 1):
@@ -85,13 +92,13 @@ def conv_block(x, stage, branch, nb_filter, dropout_rate=None, weight_decay=1e-4
     inter_channel = nb_filter * 4
     x = BatchNormalization(epsilon=eps, axis=concat_axis)(x)
     x = Activation('relu')(x)
-    x = Conv2D(inter_channel, (1, 1), use_bias=False)(x)
+    x = Conv2D(inter_channel, (1, 1),kernel_initializer='he_normal', padding='same', use_bias=False,kernel_regularizer=regularizers.l2(weight_decay))(x)
 
     if dropout_rate:
         x = Dropout(dropout_rate)(x)
 
     # 3x3 Convolution
-    x = DenseTarget2D(x, growth_rate=nb_filter, include_target=include_target, l2=l2)
+    x = DenseTarget2D(x, growth_rate=nb_filter, weight_decay=weight_decay, include_target=include_target, l2=l2)
     l2 *= l2_buildup
 
     if dropout_rate:
@@ -115,7 +122,7 @@ def transition_block(x, stage, nb_filter, compression=1.0, dropout_rate=None, we
 
     x = BatchNormalization(epsilon=eps, axis=concat_axis)(x)
     x = Activation('relu')(x)
-    x = Conv2D(int(nb_filter * compression), (1, 1), use_bias=False)(x)
+    x = Conv2D(int(nb_filter * compression), (1, 1),kernel_initializer='he_normal', padding='same', use_bias=False,kernel_regularizer=regularizers.l2(weight_decay))(x)
 
     if dropout_rate:
         x = Dropout(dropout_rate)(x)
@@ -151,14 +158,39 @@ def dense_block(x, stage, nb_layers, nb_filter, growth_rate, dropout_rate=None, 
 
     return concat_feat, nb_filter
 
-def DenseTarget2D(x, growth_rate, include_target = 'false', attention_function='cauchy', l2=0.01, use_bias=False):
-    x = BatchNormalization()(x)
-    x = Activation('relu')(x)
-    x = Conv2D(growth_rate, kernel_size=(3, 3), padding='same', use_bias=use_bias)(x)
-    if include_target == 'true':
-        x = Target2D(attention_function=attention_function, sig1_regularizer=regularizers.l2(l2),sig2_regularizer=regularizers.l2(l2))(x)
-    return x
+def wideResNet(k, dropout, include_target='false', l2=0.01, l2_buildup = 1):
+    # Determine proper input shape
+    if K.image_dim_ordering() == 'th':
+        img_input = Input(shape=(3, 32, 32))
+    else:
+        img_input = Input(shape=(32, 32, 3))
 
+    if K.image_dim_ordering() == 'tf':
+        bn_axis = 3
+    else:
+        bn_axis = 1
+
+    x = Lambda(lambda x: x / 255)(img_input)
+    x = Conv2D(16 * k, (3, 3), padding='same')(x)
+
+    x = conv_block_resnet(x, [16 * k, 16 * k], strides=(1, 1), dropout=dropout, include_target = include_target, l2 = l2, l2_buildup = l2_buildup)
+    x = identity_block(x, [16 * k, 16 * k], dropout=dropout, include_target = include_target, l2 = l2, l2_buildup = l2_buildup)
+
+    x = conv_block_resnet(x, [32 * k, 32 * k], dropout=dropout, include_target = include_target, l2 = l2, l2_buildup = l2_buildup)
+    x = identity_block(x, [32 * k, 32 * k], dropout=dropout, include_target = include_target, l2 = l2, l2_buildup = l2_buildup)
+
+    x = conv_block_resnet(x, [64 * k, 64 * k], dropout=dropout, include_target = include_target, l2 = l2, l2_buildup = l2_buildup)
+    x = identity_block(x, [64 * k, 64 * k], dropout=dropout, include_target = include_target, l2 = l2, l2_buildup = l2_buildup)
+
+    x = BatchNormalization(axis=bn_axis)(x)
+    x = Activation('relu')(x)
+    x = AveragePooling2D((8, 8))(x)
+    x = Flatten()(x)
+    x = Dense(10, activation='softmax')(x)
+
+    model = Model(img_input, x)
+
+    return model
 
 def identity_block(input_tensor, filters, dropout, include_target='false', l2=0.01, l2_buildup = 1):
     '''The identity_block is the block that has no conv layer at shortcut
@@ -214,7 +246,7 @@ def conv_block_resnet(input_tensor, filters, strides=(2, 2), dropout=0, include_
     shortcut = Conv2D(nb_filter2, (1, 1), strides=strides)(x)
     x = Conv2D(nb_filter1, (3, 3), strides=strides, padding='same')(x)
     if include_target == 'true':
-        x = Target2D(attention_function='cauchy', sig1_regularizer=regularizers.l2(l2),sig2_regularizer=regularizers.l2(l2))(x)
+        x = AR2D(attention_function='cauchy', sig1_regularizer=regularizers.l2(l2),sig2_regularizer=regularizers.l2(l2))(x)
     l2 *= l2_buildup
 
     if dropout>0:
@@ -225,37 +257,3 @@ def conv_block_resnet(input_tensor, filters, strides=(2, 2), dropout=0, include_
 
     x = Add()([x, shortcut])
     return x
-
-def wideResNet(k, dropout, include_target='false', l2=0.01, l2_buildup = 1):
-    # Determine proper input shape
-    if K.image_dim_ordering() == 'th':
-        img_input = Input(shape=(3, 32, 32))
-    else:
-        img_input = Input(shape=(32, 32, 3))
-
-    if K.image_dim_ordering() == 'tf':
-        bn_axis = 3
-    else:
-        bn_axis = 1
-
-    x = Lambda(lambda x: x / 255)(img_input)
-    x = Conv2D(16 * k, (3, 3), padding='same')(x)
-
-    x = conv_block_resnet(x, [16 * k, 16 * k], strides=(1, 1), dropout=dropout, include_target = include_target, l2 = l2, l2_buildup = l2_buildup)
-    x = identity_block(x, [16 * k, 16 * k], dropout=dropout, include_target = include_target, l2 = l2, l2_buildup = l2_buildup)
-
-    x = conv_block_resnet(x, [32 * k, 32 * k], dropout=dropout, include_target = include_target, l2 = l2, l2_buildup = l2_buildup)
-    x = identity_block(x, [32 * k, 32 * k], dropout=dropout, include_target = include_target, l2 = l2, l2_buildup = l2_buildup)
-
-    x = conv_block_resnet(x, [64 * k, 64 * k], dropout=dropout, include_target = include_target, l2 = l2, l2_buildup = l2_buildup)
-    x = identity_block(x, [64 * k, 64 * k], dropout=dropout, include_target = include_target, l2 = l2, l2_buildup = l2_buildup)
-
-    x = BatchNormalization(axis=bn_axis)(x)
-    x = Activation('relu')(x)
-    x = AveragePooling2D((8, 8))(x)
-    x = Flatten()(x)
-    x = Dense(10, activation='softmax')(x)
-
-    model = Model(img_input, x)
-
-    return model

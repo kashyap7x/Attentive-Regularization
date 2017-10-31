@@ -7,9 +7,10 @@ from keras.layers import Dense, Conv2D, Concatenate, MaxPooling2D, GlobalAverage
 from keras import backend as K
 from keras.models import Model
 from keras.optimizers import Adam, SGD
-from denseBlocks import DenseTarget2D
+from denseBlocks import DenseTarget2D, DenseNet
 from visualization import *
-from keras.callbacks import LearningRateScheduler, CSVLogger, ModelCheckpoint
+from keras.callbacks import LearningRateScheduler, CSVLogger, ModelCheckpoint, TensorBoard
+np.random.seed(1337)
 
 batch_size = 128
 num_classes = 10
@@ -41,44 +42,16 @@ x_train = x_train.astype('float32')
 x_test = x_test.astype('float32')
 x_train /= 255
 x_test /= 255
-print('x_train shape:', x_train.shape)
-print(x_train.shape[0], 'train samples')
-print(x_test.shape[0], 'test samples')
 
 # convert class vectors to binary class matrices
 y_train = keras.utils.to_categorical(y_train, num_classes)
 y_test = keras.utils.to_categorical(y_test, num_classes)
 
-growth_rate=24
-l2 = 0.001
-l2_buildup = 1
-
-input = Input(shape=input_shape)
-x = Conv2D(32, kernel_size=(3, 3), padding='same', use_bias=False)(input)
-x = BatchNormalization()(x)
-x = Activation('relu')(x)
-x = MaxPooling2D(pool_size=(2, 2))(x)
-
-y = DenseTarget2D(x, growth_rate=growth_rate, include_target = 'true', l2=l2)
-x = Concatenate(axis=-1)([x, y])
-l2 *= l2_buildup
-
-y = DenseTarget2D(x, growth_rate=growth_rate, include_target = 'true', l2=l2)
-x = Concatenate(axis=-1)([x, y])
-l2 *= l2_buildup
-
-y = DenseTarget2D(x, growth_rate=growth_rate, include_target = 'true', l2=l2)
-x = Concatenate(axis=-1)([x, y])
-
-x = BatchNormalization()(x)
-x = Activation('relu')(x)
-x = GlobalAveragePooling2D()(x)
-out = Dense(num_classes, activation='softmax')(x)
-model = Model(input, out)
+model = DenseNet(in_shape=input_shape, growth_rate=12, lay_per_block=2, reduction=0.5, dropout_rate=0, include_target='true', l2=0.0001)
 
 # Optimizer
 #adam = Adam(lr= 0.001, beta_1= 0.9, beta_2= 0.999, epsilon= 1e-08, decay= 0.0)
-sgd = SGD(lr=0.1, momentum=0.9, decay=0.0001, nesterov=True)
+sgd = SGD(lr=0.1, momentum=0.9, nesterov=True)
 
 model.compile(loss=keras.losses.categorical_crossentropy,
               optimizer=sgd,
@@ -91,7 +64,8 @@ model.summary()
 lr_decay = LearningRateScheduler(scheduler)
 csv_logger = CSVLogger('MNIST_train.log')
 checkpoint = ModelCheckpoint(filepath='MNIST_weights.hdf5', monitor='val_acc', verbose=0, save_best_only=True, mode='max')
-callbacks_list = [lr_decay, csv_logger, checkpoint]
+tensorBoard = TensorBoard(log_dir='./logs')
+callbacks_list = [lr_decay, csv_logger, checkpoint, tensorBoard]
 
 model.fit(x_train, y_train,
           batch_size=batch_size,
@@ -101,6 +75,9 @@ model.fit(x_train, y_train,
           validation_data=(x_test, y_test))
 
 # visualization of the gaussian filters
-visualizeLayerOutput(model, 8, 6, 4)
-visualizeLayerOutput(model, 13, 6, 4)
-visualizeLayerOutput(model, 18, 6, 4)
+visualizeLayerOutput(model, 8, 3, 4)
+visualizeLayerOutput(model, 15, 3, 4)
+visualizeLayerOutput(model, 26, 3, 4)
+visualizeLayerOutput(model, 33, 3, 4)
+visualizeLayerOutput(model, 44, 3, 4)
+visualizeLayerOutput(model, 51, 3, 4)

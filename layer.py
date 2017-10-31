@@ -1,20 +1,18 @@
-from keras import regularizers, constraints
+from keras import activations, initializers, regularizers, constraints
+from keras.utils import conv_utils
 from keras.engine import Layer, InputSpec
 from keras.layers import Conv2D, Concatenate, BatchNormalization, Activation
 from keras import backend as K
 import numpy as np
-if K.backend() == 'theano':
-    import theano
-else:
-    import tensorflow as tf
+import tensorflow as tf
 
-class Target1D(Layer):
+class AR1D(Layer):
     '''
-	One-dimensional targeted filtering layer. Use after Convolution1D.
+	One-dimensional attentive regularization layer. Use after Convolution1D.
 
 	# Usage
-		x = Target1D()(x)
-		model.add(Target1D())
+		x = AR1D()(x)
+		model.add(AR1D())
 
 	# Arguments
 		attention_function: name of the attention function used. 'gaussian' or 'cauchy'.
@@ -51,75 +49,47 @@ class Target1D(Layer):
         if self.input_dim:
             kwargs['input_shape'] = (self.input_length, self.input_dim)
 
-        super(Target1D, self).__init__(**kwargs)
+        super(AR1D, self).__init__(**kwargs)
 
     def build(self, input_shape):
         self.input_spec = [InputSpec(shape=input_shape)]
         input_length = input_shape[1]
         input_dim = input_shape[2]
 
-        if K.backend() == 'theano':
-            mu_init = np.zeros((input_dim, 1), theano.config.floatX)
-            sig_init = np.ones((input_dim, 1), theano.config.floatX)
-            base = np.tile(np.arange(input_length, dtype=theano.config.floatX), (input_dim, 1))
+        mu_init = np.zeros((input_dim, 1), K.floatx())
+        sig_init = np.ones((input_dim, 1), K.floatx())
+        base = np.tile(np.arange(input_length, dtype=K.floatx()), (input_dim, 1))
 
-            self.mu = theano.shared(mu_init)
-            self.sig = theano.shared(sig_init)
-            if self.mu_regularizer is not None:
-                self.add_loss(self.mu_regularizer(self.mu))
-            if self.sig_regularizer is not None:
-                self.add_loss(self.sig_regularizer(self.sig))
-            self.trainable_weights = [self.mu, self.sig]
+        self.mu = tf.Variable(mu_init)
+        self.sig = tf.Variable(sig_init)
+        if self.mu_regularizer is not None:
+            self.add_loss(self.mu_regularizer(self.mu))
+        if self.sig_regularizer is not None:
+            self.add_loss(self.sig_regularizer(self.sig))
+        self.trainable_weights = [self.mu, self.sig]
 
-            self.base = theano.shared(base)
-            self.non_trainable_weights = [self.base]
+        self.base = tf.Variable(base)
+        self.mu_tiled = tf.tile(self.mu, (1, input_length))
+        self.sig_tiled = tf.tile(self.sig, (1, input_length))
+        self.numerator = self.base - self.mu_tiled * input_length
+        self.denominator = self.sig_tiled * input_length / 2
 
-            self.mu_tiled = theano.tensor.tile(self.mu, (1, input_length))
-            self.sig_tiled = theano.tensor.tile(self.sig, (1, input_length))
-            self.numerator = self.base - self.mu_tiled * input_length
-            self.denominator = self.sig_tiled * input_length / 2
-
-            if self.attention_function == 'gaussian':
-                self.function = (K.exp(-(self.numerator) ** 2. / (2 * (self.denominator) ** 2))).T
-            else:
-                self.function = (1 / (1 + ((self.numerator) / self.denominator) ** 2)).T
+        if self.attention_function == 'gaussian':
+            self.function = tf.transpose(K.exp(-(self.numerator) ** 2. / (2 * (self.denominator) ** 2)))
         else:
-            mu_init = np.zeros((input_dim, 1), K.floatx())
-            sig_init = np.ones((input_dim, 1), K.floatx())
-            base = np.tile(np.arange(input_length, dtype=K.floatx()), (input_dim, 1))
-
-            self.mu = tf.Variable(mu_init)
-            self.sig = tf.Variable(sig_init)
-            if self.mu_regularizer is not None:
-                self.add_loss(self.mu_regularizer(self.mu))
-            if self.sig_regularizer is not None:
-                self.add_loss(self.sig_regularizer(self.sig))
-            self.trainable_weights = [self.mu, self.sig]
-
-            self.base = tf.Variable(base)
-            self.non_trainable_weights = [self.base]
-
-            self.mu_tiled = tf.tile(self.mu, (1, input_length))
-            self.sig_tiled = tf.tile(self.sig, (1, input_length))
-            self.numerator = self.base - self.mu_tiled * input_length
-            self.denominator = self.sig_tiled * input_length / 2
-
-            if self.attention_function == 'gaussian':
-                self.function = tf.transpose(K.exp(-(self.numerator) ** 2. / (2 * (self.denominator) ** 2)))
-            else:
-                self.function = tf.transpose(1 / (1 + ((self.numerator) / self.denominator) ** 2))
+            self.function = tf.transpose(1 / (1 + ((self.numerator) / self.denominator) ** 2))
 
     def call(self, x, mask=None):
         return x * self.function
 
 
-class Target2D(Layer):
+class AR2D(Layer):
     '''
-	Two-dimensional targeted filtering layer. Use after Convolution2D.
+	Two-dimensional attentive regularization layer. Use after Convolution2D.
 
 	# Usage
-		x = Target2D()(x)
-		model.add(Target2D())
+		x = AR2D()(x)
+		model.add(AR2D())
 
 	# Arguments
 		attention_function: name of the attention function used. 'gaussian' or 'cauchy'.
@@ -169,122 +139,403 @@ class Target2D(Layer):
         if self.input_dim:
             kwargs['input_shape'] = (self.input_length, self.input_dim)
 
-        super(Target2D, self).__init__(**kwargs)
+        super(AR2D, self).__init__(**kwargs)
 
     def build(self, input_shape):
         self.input_spec = [InputSpec(shape=input_shape)]
         input_length = input_shape[1]
         input_dim = input_shape[3]
 
-        if K.backend() == 'theano':
-            mu_init = np.ones((input_dim, 1), theano.config.floatX) / 2
-            sig_init = np.ones((input_dim, 1), theano.config.floatX)
-            base = np.tile(np.arange(input_length, dtype=theano.config.floatX), (input_dim, 1))
+        mu_init = np.ones((input_dim, 1), K.floatx()) / 2
+        sig_init = np.ones((input_dim, 1), K.floatx())
+        base = np.tile(np.arange(input_length, dtype=K.floatx()), (input_dim, 1))
 
-            self.mu1 = theano.shared(mu_init)
-            self.sig1 = theano.shared(sig_init)
-            self.mu2 = theano.shared(mu_init)
-            self.sig2 = theano.shared(sig_init)
-            if self.mu1_regularizer is not None:
-                self.add_loss(self.mu1_regularizer(self.mu1))
-            if self.sig1_regularizer is not None:
-                self.add_loss(self.sig1_regularizer(self.sig1))
-            if self.mu2_regularizer is not None:
-                self.add_loss(self.mu2_regularizer(self.mu2))
-            if self.sig2_regularizer is not None:
-                self.add_loss(self.sig2_regularizer(self.sig2))
-            self.trainable_weights = [self.mu1, self.sig1, self.mu2, self.sig2]
+        self.mu1 = tf.Variable(mu_init)
+        self.sig1 = tf.Variable(sig_init)
+        self.mu2 = tf.Variable(mu_init)
+        self.sig2 = tf.Variable(sig_init)
+        if self.mu1_regularizer is not None:
+            self.add_loss(self.mu1_regularizer(self.mu1))
+        if self.sig1_regularizer is not None:
+            self.add_loss(self.sig1_regularizer(self.sig1))
+        if self.mu2_regularizer is not None:
+            self.add_loss(self.mu2_regularizer(self.mu2))
+        if self.sig2_regularizer is not None:
+            self.add_loss(self.sig2_regularizer(self.sig2))
+        self.trainable_weights = [self.mu1, self.sig1, self.mu2, self.sig2]
 
-            self.base = theano.shared(base)
-            self.non_trainable_weights = [self.base]
+        self.base = tf.Variable(base)
+        self.mu1_tiled = tf.tile(self.mu1, (1, input_length))
+        self.sig1_tiled = tf.tile(self.sig1, (1, input_length))
+        self.numerator1 = self.base - self.mu1_tiled * input_length
+        self.denominator1 = self.sig1_tiled * input_length / 2
 
-            self.mu1_tiled = theano.tensor.tile(self.mu1, (1, input_length))
-            self.sig1_tiled = theano.tensor.tile(self.sig1, (1, input_length))
-            self.numerator1 = self.base - self.mu1_tiled * input_length
-            self.denominator1 = self.sig1_tiled * input_length / 2
+        if self.attention_function == 'gaussian':
+            self.function1 = tf.transpose(
+                tf.tile(
+                    tf.expand_dims(tf.transpose(K.exp(-(self.numerator1) ** 2. / (2 * (self.denominator1) ** 2))),
+                                   2),
+                    (1, 1, input_length)), perm=[0, 2, 1])
 
-            if self.attention_function == 'gaussian':
-                self.function1 = theano.tensor.tile(K.exp(-(self.numerator1) ** 2. / (2 * (self.denominator1) ** 2)),
-                                                    (input_length, 1, 1)).T
-            else:
-                self.function1 = theano.tensor.tile(1 / (1 + ((self.numerator1) / self.denominator1) ** 2),
-                                                    (input_length, 1, 1)).T
-
-            self.mu2_tiled = theano.tensor.tile(self.mu2, (1, input_length))
-            self.sig2_tiled = theano.tensor.tile(self.sig2, (1, input_length))
-            self.numerator2 = (self.base - self.mu2_tiled * input_length).T
-            self.denominator2 = (self.sig2_tiled * input_length / 2).T
-            self.function2 = theano.tensor.tile((K.exp(-(self.numerator2) ** 2. / (2 * (self.denominator2) ** 2))).T,
-                                                (input_length, 1, 1))
-
-            if self.attention_function == 'gaussian':
-                self.function2 = theano.tensor.tile(
-                    (K.exp(-(self.numerator2) ** 2. / (2 * (self.denominator2) ** 2))).T,
-                    (input_length, 1, 1))
-            else:
-                self.function2 = theano.tensor.tile((1 / (1 + ((self.numerator2) / self.denominator2) ** 2)).T,
-                                                    (input_length, 1, 1))
-
-            self.function = np.swapaxes(self.function1 * self.function2, 1, 2)
         else:
-            mu_init = np.ones((input_dim, 1), K.floatx()) / 2
-            sig_init = np.ones((input_dim, 1), K.floatx())
-            base = np.tile(np.arange(input_length, dtype=K.floatx()), (input_dim, 1))
+            self.function1 = tf.transpose(
+                tf.tile(
+                    tf.expand_dims(tf.transpose(1 / (1 + ((self.numerator1) / self.denominator1) ** 2)), 2),
+                    (1, 1, input_length)), perm=[0, 2, 1])
 
-            self.mu1 = tf.Variable(mu_init)
-            self.sig1 = tf.Variable(sig_init)
-            self.mu2 = tf.Variable(mu_init)
-            self.sig2 = tf.Variable(sig_init)
-            if self.mu1_regularizer is not None:
-                self.add_loss(self.mu1_regularizer(self.mu1))
-            if self.sig1_regularizer is not None:
-                self.add_loss(self.sig1_regularizer(self.sig1))
-            if self.mu2_regularizer is not None:
-                self.add_loss(self.mu2_regularizer(self.mu2))
-            if self.sig2_regularizer is not None:
-                self.add_loss(self.sig2_regularizer(self.sig2))
-            self.trainable_weights = [self.mu1, self.sig1, self.mu2, self.sig2]
+        self.mu2_tiled = tf.tile(self.mu2, (1, input_length))
+        self.sig2_tiled = tf.tile(self.sig2, (1, input_length))
+        self.numerator2 = tf.transpose(self.base - self.mu2_tiled * input_length)
+        self.denominator2 = tf.transpose(self.sig2_tiled * input_length / 2)
 
-            self.base = tf.Variable(base)
-            self.non_trainable_weights = [self.base]
+        if self.attention_function == 'gaussian':
+            self.function2 = tf.transpose(
+                tf.tile(
+                    tf.expand_dims((tf.transpose(K.exp(-(self.numerator2) ** 2. / (2 * (self.denominator2) ** 2)))),
+                                   2),
+                    (1, 1, input_length,)), perm=[2, 1, 0])
 
-            self.mu1_tiled = tf.tile(self.mu1, (1, input_length))
-            self.sig1_tiled = tf.tile(self.sig1, (1, input_length))
-            self.numerator1 = self.base - self.mu1_tiled * input_length
-            self.denominator1 = self.sig1_tiled * input_length / 2
+        else:
+            self.function2 = tf.transpose(
+                tf.tile(
+                    tf.expand_dims((tf.transpose(1 / (1 + ((self.numerator2) / self.denominator2) ** 2))), 2),
+                    (1, 1, input_length,)), perm=[2, 1, 0])
 
-            if self.attention_function == 'gaussian':
-                self.function1 = tf.transpose(
-                    tf.tile(
-                        tf.expand_dims(tf.transpose(K.exp(-(self.numerator1) ** 2. / (2 * (self.denominator1) ** 2))),
-                                       2),
-                        (1, 1, input_length)), perm=[0, 2, 1])
-
-            else:
-                self.function1 = tf.transpose(
-                    tf.tile(
-                        tf.expand_dims(tf.transpose(1 / (1 + ((self.numerator1) / self.denominator1) ** 2)), 2),
-                        (1, 1, input_length)), perm=[0, 2, 1])
-
-            self.mu2_tiled = tf.tile(self.mu2, (1, input_length))
-            self.sig2_tiled = tf.tile(self.sig2, (1, input_length))
-            self.numerator2 = tf.transpose(self.base - self.mu2_tiled * input_length)
-            self.denominator2 = tf.transpose(self.sig2_tiled * input_length / 2)
-
-            if self.attention_function == 'gaussian':
-                self.function2 = tf.transpose(
-                    tf.tile(
-                        tf.expand_dims((tf.transpose(K.exp(-(self.numerator2) ** 2. / (2 * (self.denominator2) ** 2)))),
-                                       2),
-                        (1, 1, input_length,)), perm=[2, 1, 0])
-
-            else:
-                self.function2 = tf.transpose(
-                    tf.tile(
-                        tf.expand_dims((tf.transpose(1 / (1 + ((self.numerator2) / self.denominator2) ** 2))), 2),
-                        (1, 1, input_length,)), perm=[2, 1, 0])
-
-            self.function = self.function1 * self.function2
+        self.function = self.function1 * self.function2
 
     def call(self, x, mask=None):
         return x * self.function
+
+def custom_mu_init(shape, dtype=K.floatx()):
+    return K.ones(shape, dtype=dtype) / 2
+
+class Target2D(Layer):
+    """2 Dimensional Target Layer. Combines Conv2D and AR2D, with a faster convolution implementation.
+
+    This layer creates a convolution kernel that is convolved
+    with the layer input to produce a tensor of outputs.
+    If `use_bias` is True, a bias vector is created and added to the outputs.
+    Finally, if `activation` is not `None`,
+    it is applied to the outputs as well.
+
+    # Arguments
+        rank: An integer, the rank of the convolution,
+            e.g. "2" for 2D convolution.
+        filters: Integer, the dimensionality of the output space
+            (i.e. the number output of filters in the convolution).
+        kernel_size: An integer or tuple/list of n integers, specifying the
+            dimensions of the convolution window.
+        strides: An integer or tuple/list of n integers,
+            specifying the strides of the convolution.
+            Specifying any stride value != 1 is incompatible with specifying
+            any `dilation_rate` value != 1.
+        padding: One of `"valid"` or `"same"` (case-insensitive).
+        data_format: A string,
+            one of `channels_last` (default) or `channels_first`.
+            The ordering of the dimensions in the inputs.
+            `channels_last` corresponds to inputs with shape
+            `(batch, ..., channels)` while `channels_first` corresponds to
+            inputs with shape `(batch, channels, ...)`.
+            It defaults to the `image_data_format` value found in your
+            Keras config file at `~/.keras/keras.json`.
+            If you never set it, then it will be "channels_last".
+        dilation_rate: An integer or tuple/list of n integers, specifying
+            the dilation rate to use for dilated convolution.
+            Currently, specifying any `dilation_rate` value != 1 is
+            incompatible with specifying any `strides` value != 1.
+        activation: Activation function to use
+            (see [activations](../activations.md)).
+            If you don't specify anything, no activation is applied
+            (ie. "linear" activation: `a(x) = x`).
+        use_bias: Boolean, whether the layer uses a bias vector.
+        kernel_initializer: Initializer for the `kernel` weights matrix
+            (see [initializers](../initializers.md)).
+        bias_initializer: Initializer for the bias vector
+            (see [initializers](../initializers.md)).
+        kernel_regularizer: Regularizer function applied to
+            the `kernel` weights matrix
+            (see [regularizer](../regularizers.md)).
+        bias_regularizer: Regularizer function applied to the bias vector
+            (see [regularizer](../regularizers.md)).
+        activity_regularizer: Regularizer function applied to
+            the output of the layer (its "activation").
+            (see [regularizer](../regularizers.md)).
+        kernel_constraint: Constraint function applied to the kernel matrix
+            (see [constraints](../constraints.md)).
+        bias_constraint: Constraint function applied to the bias vector
+            (see [constraints](../constraints.md)).
+        attention_function: name of the attention function used. 'gaussian' or 'cauchy'.
+		input_length: input image side in pixels.
+		input_dim: number of channels/dimensions in the input.
+		mu1_constraint: instance of the [constraints](../constraints.md) module
+			(eg. maxnorm, nonneg), applied to the attention function means.
+		sig1_constraint: constraint applied to the attention function standard deviations.
+		mu1_regularizer: instance of [WeightRegularizer](../regularizers.md)
+			(eg. L1 or L2 regularization), applied to the attention function means.
+		sig1_regularizer: regularizer applied to the attention function standard deviations.
+		mu2_constraint: constraint applied to the attention function means.
+		sig2_constraint: constraint applied to the attention function standard deviations.
+		mu2_regularizer: regularizer applied to the attention function means.
+		sig2_regularizer: regularizer applied to the attention function standard deviations.
+    """
+
+    def __init__(self, filters,
+                 kernel_size,
+                 strides=(1, 1),
+                 padding='valid',
+                 data_format=None,
+                 dilation_rate=(1, 1),
+                 activation=None,
+                 use_bias=True,
+                 preslice=False,
+                 kernel_initializer='glorot_uniform',
+                 bias_initializer='zeros',
+                 kernel_regularizer=None,
+                 bias_regularizer=None,
+                 activity_regularizer=None,
+                 kernel_constraint=None,
+                 bias_constraint=None,
+                 attention_function='gaussian',
+                 mu1_regularizer=None,
+                 sig1_regularizer=None,
+                 mu2_regularizer=None,
+                 sig2_regularizer=None,
+                 mu1_constraint=None,
+                 sig1_constraint=None,
+                 mu2_constraint=None,
+                 sig2_constraint=None,
+                 input_length=None,
+                 input_dim=None,
+                 **kwargs):
+        super(Target2D, self).__init__(**kwargs)
+        self.rank = 2
+        self.filters = filters
+        self.kernel_size = conv_utils.normalize_tuple(kernel_size, self.rank, 'kernel_size')
+        self.strides = conv_utils.normalize_tuple(strides, self.rank, 'strides')
+        self.padding = conv_utils.normalize_padding(padding)
+        self.data_format = conv_utils.normalize_data_format(data_format)
+        self.dilation_rate = conv_utils.normalize_tuple(dilation_rate, self.rank, 'dilation_rate')
+        self.activation = activations.get(activation)
+        self.use_bias = use_bias
+        self.preslice = preslice
+        self.kernel_initializer = initializers.get(kernel_initializer)
+        self.bias_initializer = initializers.get(bias_initializer)
+        self.kernel_regularizer = regularizers.get(kernel_regularizer)
+        self.bias_regularizer = regularizers.get(bias_regularizer)
+        self.activity_regularizer = regularizers.get(activity_regularizer)
+        self.kernel_constraint = constraints.get(kernel_constraint)
+        self.bias_constraint = constraints.get(bias_constraint)
+        self.input_spec = InputSpec(ndim=self.rank + 2)
+
+        if attention_function not in {'gaussian', 'cauchy'}:
+            raise Exception('Invalid attention function', attention_function)
+        self.attention_function = attention_function
+        self.mu1_regularizer = regularizers.get(mu1_regularizer)
+        self.sig1_regularizer = regularizers.get(sig1_regularizer)
+        self.mu1_constraint = constraints.get(mu1_constraint)
+        self.sig1_constraint = constraints.get(sig1_constraint)
+        self.mu2_regularizer = regularizers.get(mu2_regularizer)
+        self.sig2_regularizer = regularizers.get(sig2_regularizer)
+        self.mu2_constraint = constraints.get(mu2_constraint)
+        self.sig2_constraint = constraints.get(sig2_constraint)
+
+        self.input_spec = [InputSpec(ndim=4)]
+        self.input_dim = input_dim
+        self.input_length = input_length
+
+    def build(self, input_shape):
+        if self.data_format == 'channels_first':
+            channel_axis = 1
+        else:
+            channel_axis = -1
+        if input_shape[channel_axis] is None:
+            raise ValueError('The channel dimension of the inputs '
+                             'should be defined. Found `None`.')
+        self.input_dim = input_shape[channel_axis]
+        input_dim = self.input_dim
+
+        kernel_shape = self.kernel_size + (input_dim, self.filters)
+
+        self.kernel = self.add_weight(shape=kernel_shape,
+                                      initializer=self.kernel_initializer,
+                                      name='kernel',
+                                      regularizer=self.kernel_regularizer,
+                                      constraint=self.kernel_constraint)
+        if self.use_bias:
+            self.bias = self.add_weight(shape=(self.filters,),
+                                        initializer=self.bias_initializer,
+                                        name='bias',
+                                        regularizer=self.bias_regularizer,
+                                        constraint=self.bias_constraint)
+        else:
+            self.bias = None
+        # Set input spec.
+        self.input_spec = InputSpec(ndim=self.rank + 2,
+                                    axes={channel_axis: input_dim})
+
+        # Target addition
+        self.input_length = input_shape[2]
+        input_length = self.input_length
+        input_dim = kernel_shape[-1]
+
+        mu_init = np.ones((input_dim, 1), K.floatx()) / 2
+        sig_init = np.ones((input_dim, 1), K.floatx())
+        base = np.tile(np.arange(input_length, dtype=K.floatx()), (input_dim, 1))
+
+        # self.mu1 = tf.Variable(mu_init, name='mu1')
+        # self.sig1 = tf.Variable(sig_init, name='sig1')
+        # self.mu2 = tf.Variable(mu_init, name='mu2')
+        # self.sig2 = tf.Variable(sig_init, name='sig2')
+        # if self.mu1_regularizer is not None:
+        #     self.add_loss(self.mu1_regularizer(self.mu1))
+        # if self.sig1_regularizer is not None:
+        #     self.add_loss(self.sig1_regularizer(self.sig1))
+        # if self.mu2_regularizer is not None:
+        #     self.add_loss(self.mu2_regularizer(self.mu2))
+        # if self.sig2_regularizer is not None:
+        #     self.add_loss(self.sig2_regularizer(self.sig2))
+
+        self.mu1 = self.add_weight(shape=mu_init.shape,
+                                   initializer=custom_mu_init,
+                                   name='mu1',
+                                   regularizer=self.mu1_regularizer,
+                                   constraint=self.mu1_constraint)
+
+        self.mu2 = self.add_weight(shape=mu_init.shape,
+                                   initializer=custom_mu_init,
+                                   name='mu2',
+                                   regularizer=self.mu2_regularizer,
+                                   constraint=self.mu2_constraint)
+
+        self.sig1 = self.add_weight(shape=sig_init.shape,
+                                    initializer='Ones',
+                                    name='sig1',
+                                    regularizer=self.sig1_regularizer,
+                                    constraint=self.sig1_constraint)
+
+        self.sig2 = self.add_weight(shape=sig_init.shape,
+                                    initializer='Ones',
+                                    name='sig2',
+                                    regularizer=self.sig2_regularizer,
+                                    constraint=self.sig2_constraint)
+
+        self.mu1 = tf.clip_by_value(self.mu1, 1/input_length, 1-(1/input_length))
+        self.mu2 = tf.clip_by_value(self.mu2, 1/input_length, 1-(1/input_length))
+        self.sig1 = tf.clip_by_value(self.sig1, 3/(2*input_length), 1)
+        self.sig2 = tf.clip_by_value(self.sig2, 3/(2*input_length), 1)
+        # self.trainable_weights = [self.kernel, self.mu1, self.sig1, self.mu2, self.sig2]
+
+        self.base = tf.Variable(base)
+        self.mu1_tiled = tf.tile(self.mu1, (1, input_length))
+        self.sig1_tiled = tf.tile(self.sig1, (1, input_length))
+        self.numerator1 = self.base - self.mu1_tiled * input_length
+        self.denominator1 = self.sig1_tiled * input_length / 2
+        self.mu2_tiled = tf.tile(self.mu2, (1, input_length))
+        self.sig2_tiled = tf.tile(self.sig2, (1, input_length))
+        self.numerator2 = tf.transpose(self.base - self.mu2_tiled * input_length)
+        self.denominator2 = tf.transpose(self.sig2_tiled * input_length / 2)
+
+        if self.attention_function == 'gaussian':
+            self.function1 = tf.transpose(
+                tf.tile(
+                    tf.expand_dims(tf.transpose(K.exp(-(self.numerator1) ** 2. / (2 * (self.denominator1) ** 2))),
+                                   2),
+                    (1, 1, input_length)), perm=[0, 2, 1])
+
+        else:
+            self.function1 = tf.transpose(
+                tf.tile(
+                    tf.expand_dims(tf.transpose(1 / (1 + ((self.numerator1) / self.denominator1) ** 2)), 2),
+                    (1, 1, input_length)), perm=[0, 2, 1])
+
+        if self.attention_function == 'gaussian':
+            self.function2 = tf.transpose(
+                tf.tile(
+                    tf.expand_dims((tf.transpose(K.exp(-(self.numerator2) ** 2. / (2 * (self.denominator2) ** 2)))),
+                                   2),
+                    (1, 1, input_length,)), perm=[2, 1, 0])
+
+        else:
+            self.function2 = tf.transpose(
+                tf.tile(
+                    tf.expand_dims((tf.transpose(1 / (1 + ((self.numerator2) / self.denominator2) ** 2))), 2),
+                    (1, 1, input_length,)), perm=[2, 1, 0])
+
+        rangeY = [(self.mu1 - self.sig1) * input_length, (self.mu1 + self.sig1 + 1) * input_length]
+        rangeX = [(self.mu2 - self.sig2) * input_length, (self.mu2 + self.sig2 + 1) * input_length]
+
+        self.rangeY = tf.to_int32(tf.clip_by_value(rangeY, 0, input_length - 1))
+        self.rangeX = tf.to_int32(tf.clip_by_value(rangeX, 0, input_length - 1))
+
+        self.function = self.function1 * self.function2
+
+        self.built = True
+
+    def call(self, inputs):
+
+        if self.preslice:
+            outputHeight = self.input_length
+            numFilters = self.kernel.get_shape().as_list()[-1]
+            kernList = tf.unstack(self.kernel, axis=3)
+            outputs = []
+            for i in range(numFilters):
+                kernel = tf.expand_dims(kernList[i], 3)
+                output = K.conv2d(
+                    inputs[:, self.rangeY[0,i,0]:self.rangeY[1,i,0], self.rangeX[0,i,0]:self.rangeX[1,i,0], :],
+                    kernel,
+                    strides=self.strides,
+                    padding=self.padding,
+                    data_format=self.data_format,
+                    dilation_rate=self.dilation_rate)
+
+                paddings = [[0, 0], [self.rangeY[0,i,0], outputHeight - self.rangeY[1,i,0]],
+                            [self.rangeX[0,i,0], outputHeight - self.rangeX[1,i,0]], [0, 0]]
+
+                outputs.append(tf.pad(output, paddings, "CONSTANT"))
+
+            outputs = tf.concat(outputs, axis=3)
+        else:
+            outputs = K.conv2d(
+                    inputs,
+                    self.kernel,
+                    strides=self.strides,
+                    padding=self.padding,
+                    data_format=self.data_format,
+                    dilation_rate=self.dilation_rate)
+
+        if self.use_bias:
+            outputs = K.bias_add(
+                outputs,
+                self.bias,
+                data_format=self.data_format)
+
+        if self.activation is not None:
+            outputs = self.activation(outputs)
+
+        return outputs * self.function
+
+    def compute_output_shape(self, input_shape):
+        if self.data_format == 'channels_last':
+            space = input_shape[1:-1]
+            new_space = []
+            for i in range(len(space)):
+                new_dim = conv_utils.conv_output_length(
+                    space[i],
+                    self.kernel_size[i],
+                    padding=self.padding,
+                    stride=self.strides[i],
+                    dilation=self.dilation_rate[i])
+                new_space.append(new_dim)
+            return (input_shape[0],) + tuple(new_space) + (self.filters,)
+        if self.data_format == 'channels_first':
+            space = input_shape[2:]
+            new_space = []
+            for i in range(len(space)):
+                new_dim = conv_utils.conv_output_length(
+                    space[i],
+                    self.kernel_size[i],
+                    padding=self.padding,
+                    stride=self.strides[i],
+                    dilation=self.dilation_rate[i])
+                new_space.append(new_dim)
+            return (input_shape[0], self.filters) + tuple(new_space)
