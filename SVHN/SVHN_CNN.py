@@ -14,20 +14,20 @@ from visualization import *
 np.random.seed(1337)
 
 batch_size = 64
-epochs = 20
+epochs = 40
 
 def scheduler(epoch):
-    if epoch==10 or epoch==15:
+    if epoch==20 or epoch==30:
         lr = K.get_value(model.optimizer.lr)
         K.set_value(model.optimizer.lr, lr*.1)
         print("lr changed to {}".format(lr*.1))
     return K.get_value(model.optimizer.lr)
 
-x_train, y_train, x_val, y_val, x_test, y_test = getSVHNData()
+x_train, y_train, x_val, y_val, x_test, y_test = getSVHNData(full=False)
 #datagen = ImageDataGenerator(rescale= 1. / 255)
 
 #model = wideResNet(k=8, dropout=0.4, include_target='false')
-model = DenseNet(growth_rate=12, reduction=0.5, dropout_rate=0, include_target='false')
+model = DenseNet(growth_rate=48, reduction=0.5, dropout_rate=0, include_target='false')
 
 # Optimizer
 # adam = Adam(lr= 0.01, beta_1= 0.9, beta_2= 0.999, epsilon= 1e-08, decay= 0.0)
