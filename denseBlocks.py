@@ -6,18 +6,18 @@ from keras import backend as K
 from layer import AR2D, Target2D
 from keras.models import Model
 
-def DenseTarget2D(x, growth_rate, weight_decay=1e-4, include_target = 'false', attention_function='cauchy', l2=0.01, use_bias=False):
+def DenseTarget2D(x, growth_rate, weight_decay=1e-4, include_target = 'false', attention_function='cauchy', l2=0.00001, use_bias=False):
     x = BatchNormalization()(x)
     x = Activation('relu')(x)
     if include_target == 'false':
-        x = Conv2D(growth_rate, kernel_size=(3, 3), kernel_initializer='he_normal', padding='same', use_bias=False,kernel_regularizer=regularizers.l2(weight_decay))(x)
+        x = Conv2D(growth_rate, kernel_size=(3, 3), kernel_initializer='he_normal', padding='same', use_bias=use_bias,kernel_regularizer=regularizers.l2(weight_decay))(x)
     elif include_target == 'preslice':
-        x = Target2D(growth_rate, kernel_size=(3, 3), kernel_initializer='he_normal', padding='same', use_bias=False, preslice=True, kernel_regularizer=regularizers.l2(weight_decay), attention_function=attention_function, sig1_regularizer=regularizers.l2(l2),sig2_regularizer=regularizers.l2(l2))(x)
+        x = Target2D(growth_rate, kernel_size=(3, 3), kernel_initializer='he_normal', padding='same', use_bias=use_bias, preslice=True, kernel_regularizer=regularizers.l2(weight_decay), attention_function=attention_function, sig1_regularizer=regularizers.l2(l2),sig2_regularizer=regularizers.l2(l2))(x)
     else:
-        x = Target2D(growth_rate, kernel_size=(3, 3), kernel_initializer='he_normal', padding='same', use_bias=False,kernel_regularizer=regularizers.l2(weight_decay), attention_function=attention_function, sig1_regularizer=regularizers.l2(l2),sig2_regularizer=regularizers.l2(l2))(x)
+        x = Target2D(growth_rate, kernel_size=(3, 3), kernel_initializer='he_normal', padding='same', use_bias=use_bias,kernel_regularizer=regularizers.l2(weight_decay), attention_function=attention_function, sig1_regularizer=regularizers.l2(l2),sig2_regularizer=regularizers.l2(l2))(x)
     return x
 
-def DenseNet(in_shape=(32, 32, 3), nb_dense_block = 3, lay_per_block = 6, growth_rate=48, reduction=0.5, dropout_rate=0.0, weight_decay=1e-4, classes=10, include_target='false', l2=0.01, l2_buildup = 1, weights_path=None):
+def DenseNet(in_shape=(32, 32, 3), nb_dense_block = 3, lay_per_block = 6, growth_rate=48, bottleneck=True, reduction=0.5, dropout_rate=0.0, weight_decay=1e-4, classes=10, include_target='false', l2=0.01, l2_buildup = 1, weights_path=None):
     '''Instantiate the DenseNet 121 architecture,
         # Arguments
             nb_dense_block: number of dense blocks to add to end
@@ -52,14 +52,15 @@ def DenseNet(in_shape=(32, 32, 3), nb_dense_block = 3, lay_per_block = 6, growth
     # Add dense blocks
     for block_idx in range(nb_dense_block - 1):
         stage = block_idx+2
-        x, nb_filter = dense_block(x, stage, nb_layers[block_idx], nb_filter, growth_rate, dropout_rate=dropout_rate, weight_decay=weight_decay, include_target = include_target, l2 = l2, l2_buildup = l2_buildup)
+        x, nb_filter = dense_block(x, stage, nb_layers[block_idx], nb_filter, growth_rate, bottleneck=bottleneck, dropout_rate=dropout_rate, weight_decay=weight_decay, include_target = include_target, l2 = l2)
+        l2 *= l2_buildup
 
         # Add transition_block
         x = transition_block(x, stage, nb_filter, compression=compression, dropout_rate=dropout_rate, weight_decay=weight_decay)
         nb_filter = int(nb_filter * compression)
 
     final_stage = stage + 1
-    x, nb_filter = dense_block(x, final_stage, nb_layers[-1], nb_filter, growth_rate, dropout_rate=dropout_rate, weight_decay=weight_decay, include_target = include_target, l2 = l2, l2_buildup = l2_buildup)
+    x, nb_filter = dense_block(x, final_stage, nb_layers[-1], nb_filter, growth_rate, bottleneck=bottleneck, dropout_rate=dropout_rate, weight_decay=weight_decay, include_target = include_target, l2 = l2)
 
     x = BatchNormalization(epsilon=eps, axis=concat_axis)(x)
     x = Activation('relu')(x)
@@ -76,7 +77,43 @@ def DenseNet(in_shape=(32, 32, 3), nb_dense_block = 3, lay_per_block = 6, growth
     return model
 
 
-def conv_block(x, stage, branch, nb_filter, dropout_rate=None, weight_decay=1e-4, include_target='false', l2=0.01, l2_buildup = 1):
+def dense_block(x, stage, nb_layers, nb_filter, growth_rate, bottleneck=True, dropout_rate=None, weight_decay=1e-4, grow_nb_filters=True, include_target='false', l2=0.01):
+    ''' Build a dense_block where the output of each conv_block is fed to subsequent ones
+        # Arguments
+            x: input tensor
+            stage: index for dense block
+            nb_layers: the number of layers of conv_block to append to the model.
+            nb_filter: number of filters
+            growth_rate: growth rate
+            dropout_rate: dropout rate
+            weight_decay: weight decay factor
+            grow_nb_filters: flag to decide to allow number of filters to grow
+    '''
+
+    concat_feat = x
+
+    for i in range(nb_layers):
+        branch = i+1
+        x = conv_block(concat_feat, stage, branch, growth_rate, bottleneck, dropout_rate, weight_decay, include_target = include_target, l2 = l2)
+        if bottleneck:
+            concat_feat = Concatenate(axis=concat_axis)([concat_feat, x])
+
+            if grow_nb_filters:
+                nb_filter += growth_rate
+
+        else:
+            concat_feat = Concatenate(axis=concat_axis)([concat_feat, x])
+            x = conv_block(concat_feat, stage, branch, growth_rate, bottleneck, dropout_rate, weight_decay,
+                           include_target=include_target, l2=l2)
+            concat_feat = Concatenate(axis=concat_axis)([concat_feat, x])
+
+            if grow_nb_filters:
+                nb_filter += growth_rate*2
+
+    return concat_feat, nb_filter
+
+
+def conv_block(x, stage, branch, nb_filter, bottleneck=True, dropout_rate=None, weight_decay=1e-4, include_target='false', l2=0.0001):
     '''Apply BatchNorm, Relu, bottleneck 1x1 Conv2D, 3x3 Conv2D, and option dropout
         # Arguments
             x: input tensor
@@ -88,18 +125,18 @@ def conv_block(x, stage, branch, nb_filter, dropout_rate=None, weight_decay=1e-4
     '''
     eps = 1.1e-5
 
+    if bottleneck:
     # 1x1 Convolution (Bottleneck layer)
-    inter_channel = nb_filter * 4
-    x = BatchNormalization(epsilon=eps, axis=concat_axis)(x)
-    x = Activation('relu')(x)
-    x = Conv2D(inter_channel, (1, 1),kernel_initializer='he_normal', padding='same', use_bias=False,kernel_regularizer=regularizers.l2(weight_decay))(x)
+        inter_channel = nb_filter * 2
+        x = BatchNormalization(epsilon=eps, axis=concat_axis)(x)
+        x = Activation('relu')(x)
+        x = Conv2D(inter_channel, (1, 1),kernel_initializer='he_normal', padding='same', use_bias=False,kernel_regularizer=regularizers.l2(weight_decay))(x)
 
-    if dropout_rate:
-        x = Dropout(dropout_rate)(x)
+        if dropout_rate:
+            x = Dropout(dropout_rate)(x)
 
     # 3x3 Convolution
     x = DenseTarget2D(x, growth_rate=nb_filter, weight_decay=weight_decay, include_target=include_target, l2=l2)
-    l2 *= l2_buildup
 
     if dropout_rate:
         x = Dropout(dropout_rate)(x)
@@ -130,33 +167,6 @@ def transition_block(x, stage, nb_filter, compression=1.0, dropout_rate=None, we
     x = AveragePooling2D((2, 2), strides=(2, 2))(x)
 
     return x
-
-
-def dense_block(x, stage, nb_layers, nb_filter, growth_rate, dropout_rate=None, weight_decay=1e-4, grow_nb_filters=True, include_target='false', l2=0.01, l2_buildup = 1):
-    ''' Build a dense_block where the output of each conv_block is fed to subsequent ones
-        # Arguments
-            x: input tensor
-            stage: index for dense block
-            nb_layers: the number of layers of conv_block to append to the model.
-            nb_filter: number of filters
-            growth_rate: growth rate
-            dropout_rate: dropout rate
-            weight_decay: weight decay factor
-            grow_nb_filters: flag to decide to allow number of filters to grow
-    '''
-
-    eps = 1.1e-5
-    concat_feat = x
-
-    for i in range(nb_layers):
-        branch = i+1
-        x = conv_block(concat_feat, stage, branch, growth_rate, dropout_rate, weight_decay, include_target = include_target, l2 = l2, l2_buildup = l2_buildup)
-        concat_feat = Concatenate(axis=concat_axis)([concat_feat, x])
-
-        if grow_nb_filters:
-            nb_filter += growth_rate
-
-    return concat_feat, nb_filter
 
 def wideResNet(k, dropout, include_target='false', l2=0.01, l2_buildup = 1):
     # Determine proper input shape

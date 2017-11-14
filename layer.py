@@ -461,8 +461,8 @@ class Target2D(Layer):
                     tf.expand_dims((tf.transpose(1 / (1 + ((self.numerator2) / self.denominator2) ** 2))), 2),
                     (1, 1, input_length,)), perm=[2, 1, 0])
 
-        rangeY = [(self.mu1 - self.sig1) * input_length, (self.mu1 + self.sig1 + 1) * input_length]
-        rangeX = [(self.mu2 - self.sig2) * input_length, (self.mu2 + self.sig2 + 1) * input_length]
+        rangeX = [(self.mu1 - self.sig1/np.sqrt(2)) * input_length, (self.mu1 + self.sig1/np.sqrt(2)) * input_length + 1]
+        rangeY = [(self.mu2 - self.sig2/np.sqrt(2)) * input_length, (self.mu2 + self.sig2/np.sqrt(2)) * input_length + 1]
 
         self.rangeY = tf.to_int32(tf.clip_by_value(rangeY, 0, input_length - 1))
         self.rangeX = tf.to_int32(tf.clip_by_value(rangeX, 0, input_length - 1))
@@ -539,3 +539,34 @@ class Target2D(Layer):
                     dilation=self.dilation_rate[i])
                 new_space.append(new_dim)
             return (input_shape[0], self.filters) + tuple(new_space)
+
+    def get_config(self):
+        config = {
+            'filters': self.filters,
+            'kernel_size': self.kernel_size,
+            'strides': self.strides,
+            'padding': self.padding,
+            'data_format': self.data_format,
+            'dilation_rate': self.dilation_rate,
+            'activation': activations.serialize(self.activation),
+            'use_bias': self.use_bias,
+            'preslice': self.preslice,
+            'kernel_initializer': initializers.serialize(self.kernel_initializer),
+            'bias_initializer': initializers.serialize(self.bias_initializer),
+            'kernel_regularizer': regularizers.serialize(self.kernel_regularizer),
+            'bias_regularizer': regularizers.serialize(self.bias_regularizer),
+            'activity_regularizer': regularizers.serialize(self.activity_regularizer),
+            'kernel_constraint': constraints.serialize(self.kernel_constraint),
+            'bias_constraint': constraints.serialize(self.bias_constraint),
+            'attention_function': self.attention_function,
+            'mu1_regularizer': regularizers.serialize(self.mu1_regularizer),
+            'sig1_regularizer': regularizers.serialize(self.sig1_regularizer),
+            'mu2_regularizer': regularizers.serialize(self.mu2_regularizer),
+            'sig2_regularizer': regularizers.serialize(self.sig2_regularizer),
+            'mu1_constraint': constraints.serialize(self.mu1_constraint),
+            'sig1_constraint': constraints.serialize(self.sig1_constraint),
+            'mu2_constraint': constraints.serialize(self.mu2_constraint),
+            'sig2_constraint': constraints.serialize(self.sig2_constraint)
+        }
+        base_config = super(Target2D, self).get_config()
+        return dict(list(base_config.items()) + list(config.items()))

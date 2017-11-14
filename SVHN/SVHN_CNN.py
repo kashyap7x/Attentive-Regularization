@@ -9,15 +9,17 @@ from keras.models import Model
 from keras.callbacks import LearningRateScheduler, CSVLogger, ModelCheckpoint
 from denseBlocks import DenseTarget2D
 from denseBlocks import DenseNet, wideResNet
+from countFlops import countFlops
 from SVHNDataUtils import getSVHNData
 from visualization import *
+import tensorflow as tf
 np.random.seed(1337)
 
 batch_size = 64
-epochs = 40
+epochs = 20
 
 def scheduler(epoch):
-    if epoch==20 or epoch==30:
+    if epoch==10 or epoch==20:
         lr = K.get_value(model.optimizer.lr)
         K.set_value(model.optimizer.lr, lr*.1)
         print("lr changed to {}".format(lr*.1))
@@ -27,7 +29,7 @@ x_train, y_train, x_val, y_val, x_test, y_test = getSVHNData(full=False)
 #datagen = ImageDataGenerator(rescale= 1. / 255)
 
 #model = wideResNet(k=8, dropout=0.4, include_target='false')
-model = DenseNet(growth_rate=48, reduction=0.5, dropout_rate=0, include_target='false')
+model = DenseNet(growth_rate=36, bottleneck=True, lay_per_block = 6, reduction=0.5, dropout_rate=0.2, include_target='true', l2=0.0001, l2_buildup=2)
 
 # Optimizer
 # adam = Adam(lr= 0.01, beta_1= 0.9, beta_2= 0.999, epsilon= 1e-08, decay= 0.0)
@@ -46,24 +48,26 @@ csv_logger = CSVLogger('SVHN_train.log')
 checkpoint = ModelCheckpoint(filepath='SVHN_weights.hdf5', monitor='val_acc', verbose=0, save_best_only=True, mode='max')
 callbacks_list = [lr_decay, csv_logger, checkpoint]
 
+keras.backend.get_session().run(tf.initialize_all_variables())
+
 model.fit(x_train, y_train,
           batch_size=batch_size,
           epochs=epochs,
           verbose=1,
           callbacks=callbacks_list,
           validation_data=(x_val, y_val))
-'''
-model.fit_generator(datagen.flow(x_train, y_train,batch_size=batch_size),
-                    steps_per_epoch=x_train.shape[0] // batch_size,
-                    epochs=epochs,
-                    verbose=1,
-                    callbacks=callbacks_list,
-                    validation_data=(x_val, y_val))
-'''
 
-score = model.evaluate(x_test, y_test)
-print('Test loss:', score[0])
-print('Test accuracy:', score[1])
+print(countFlops(model))
+# model.fit_generator(datagen.flow(x_train, y_train,batch_size=batch_size),
+#                     steps_per_epoch=x_train.shape[0] // batch_size,
+#                     epochs=epochs,
+#                     verbose=1,
+#                     callbacks=callbacks_list,
+#                     validation_data=(x_val, y_val))
+
+#score = model.evaluate(x_test, y_test)
+#print('Test loss:', score[0])
+#print('Test accuracy:', score[1])
 
 # visualization of the gaussian filters
 # visualizeLayerOutput(model, 8, 6, 4)
