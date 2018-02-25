@@ -5,9 +5,19 @@ import matplotlib.pyplot as plt
 import matplotlib.cm as cm
 from mpl_toolkits.axes_grid1 import make_axes_locatable
 
+
 def make_mosaic(imgs, nrows, ncols, getRangeX, getRangeY, border=1):
-    # Given a set of images with all the same shape, makes a
-    # mosaic with nrows and ncols
+    """
+    Given a set of images with all the same shape, makes a mosaic for visualizing the target layer
+    :param imgs: images
+    :param nrows: # rows
+    :param ncols: # cols
+    :param getRangeX: X range for the ROI box
+    :param getRangeY: Y range for the ROI box
+    :param border: number of pixels between images
+    :return:
+    """
+
     nimgs = imgs.shape[0]
     imshape = imgs.shape[1:]
     mosaic = np.ma.masked_all((nrows * imshape[0] + (nrows - 1) * border,
@@ -27,8 +37,18 @@ def make_mosaic(imgs, nrows, ncols, getRangeX, getRangeY, border=1):
         col * paddedw:col * paddedw + imshape[1]] = im
     return mosaic
 
+
 def nice_imshow(ax, data, vmin=None, vmax=None, cmap=cm.gray, fName='fig.png'):
-    # Wrapper around plt.imshow
+    """
+    Wrapper around plt.imshow. Currently disabled so as to save images directly
+    :param ax:
+    :param data:
+    :param vmin:
+    :param vmax:
+    :param cmap:
+    :param fName:
+    :return:
+    """
     '''
     if vmin is None:
         vmin = data.min()
@@ -42,11 +62,16 @@ def nice_imshow(ax, data, vmin=None, vmax=None, cmap=cm.gray, fName='fig.png'):
     '''
     plt.imsave(fName,data, cmap=cmap)
 
-def visualizeLayerOutput(model, layerNum=12, ySize=16, xSize=32):
-    # Displays the selected input in visual form and
-    # outputs of the output layer for a single input with a given input in both
-    # pictorial and numerical form
 
+def visualizeLayerOutput(model, layerNum=12, ySize=16, xSize=32):
+    """
+    Plots AR window
+    :param model: keras model
+    :param layerNum: target layer number
+    :param ySize: grid Y size
+    :param xSize: grid X size
+    :return:
+    """
     getFunction = K.eval(model.layers[layerNum].function)
     getRangeX = K.eval(model.layers[layerNum].rangeX)
     getRangeY = K.eval(model.layers[layerNum].rangeY)
@@ -56,11 +81,15 @@ def visualizeLayerOutput(model, layerNum=12, ySize=16, xSize=32):
     plt.figure(figsize=(ySize * 0.75, xSize * 0.75))
     nice_imshow(plt.gca(), make_mosaic(output_image, ySize, xSize, getRangeX, getRangeY), cmap=cm.gray, fName=str(layerNum) + '.png')
 
-def visualizeLayerOutput1D(model, layerNum=3, fName='fig.png'):
-    # Displays the selected input in visual form and
-    # outputs of the output layer for a single input with a given input in both
-    # pictorial and numerical form
 
+def visualizeLayerOutput1D(model, layerNum=3, fName='fig.png'):
+    """
+    1 dimensional version of visualizeLayerOutput, corresponding to the AR1D layer
+    :param model: keras model
+    :param layerNum: AR1D layer number
+    :param fName: filename to save plot
+    :return:
+    """
     getFunction = K.eval(model.layers[layerNum].function)
     # print(np.shape(getFunction))
     output_image = np.array(getFunction)

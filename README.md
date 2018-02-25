@@ -1,15 +1,22 @@
-# Targeted Filter Networks
+# Attentive Regularization
 
-Soft attention based kernel specialization for convolutional neural networks
+Attentive Regularization is a method to constrain the activation maps of kernels in Convolutional Neural Networks to specific regions of interest.
+Each kernel learns a location of specialization along with its weights through standard backpropagation.
 
-CK+ preprocessed maximum AU intensity frames
-https://drive.google.com/a/andrew.cmu.edu/file/d/0BweoVV_9uBuEN29Pa0ZoUkg1LVU/view?usp=sharing
+This repository is a keras implementation of Attentive Regularization with layers implemented in TensorFlow.
+Additional scripts are for experiments on MNIST, synthesized tlMNIST and SVHN.
 
-Corresponding AU Labels (K-Hot encoded)
-https://drive.google.com/a/andrew.cmu.edu/file/d/0BweoVV_9uBuEdXVVZzJ6ZjBMSk0/view?usp=sharing
+* `layer.py` has implementatons of 1D and 2D attentive regularization, along with Target2D (efficient Conv2D + AR2D)
+* `networkBlocks.py` has base code for [DenseNets](https://github.com/liuzhuang13/DenseNet) and [Wide ResNets](https://github.com/szagoruyko/wide-residual-networks). 
+* `visualization.py` has functions to save images of the learned attention maps
+* `countFlops.py` is used to count number of floating point multiplications and additions in a keras model
 
-20 Newsgroups text classification data
-http://qwone.com/~jason/20Newsgroups/20news-bydate.tar.gz
+### Requires
 
-GloVe text embeddings
-http://nlp.stanford.edu/data/glove.6B.zip
+* Keras
+* TensorFlow
+* cv2
+* NumPy
+* SciPy
+* matplotlib
+* h5py

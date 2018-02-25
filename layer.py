@@ -6,6 +6,7 @@ from keras import backend as K
 import numpy as np
 import tensorflow as tf
 
+
 class AR1D(Layer):
     '''
 	One-dimensional attentive regularization layer. Use after Convolution1D.
@@ -206,8 +207,12 @@ class AR2D(Layer):
     def call(self, x, mask=None):
         return x * self.function
 
+
+'''
 def custom_mu_init(shape, dtype=K.floatx()):
     return K.ones(shape, dtype=dtype) / 2
+'''
+
 
 class Target2D(Layer):
     """2 Dimensional Target Layer. Combines Conv2D and AR2D, with a faster convolution implementation.
@@ -351,10 +356,35 @@ class Target2D(Layer):
         if input_shape[channel_axis] is None:
             raise ValueError('The channel dimension of the inputs '
                              'should be defined. Found `None`.')
+        # Target addition
         self.input_dim = input_shape[channel_axis]
         input_dim = self.input_dim
 
         kernel_shape = self.kernel_size + (input_dim, self.filters)
+        self.input_length = input_shape[2]
+        input_length = self.input_length
+        input_dim = kernel_shape[-1]
+
+        mu_init = np.ones((input_dim, 1), K.floatx()) / 2
+        sig_init = np.ones((input_dim, 1), K.floatx())
+        base = np.tile(np.arange(input_length, dtype=K.floatx()), (input_dim, 1))
+
+        self.mu1 = tf.Variable(mu_init, name='mu1')
+        self.sig1 = tf.Variable(sig_init, name='sig1')
+        self.mu2 = tf.Variable(mu_init, name='mu2')
+        self.sig2 = tf.Variable(sig_init, name='sig2')
+
+        if self.mu1_regularizer is not None:
+            self.add_loss(self.mu1_regularizer(self.mu1))
+        if self.sig1_regularizer is not None:
+            self.add_loss(self.sig1_regularizer(self.sig1))
+        if self.mu2_regularizer is not None:
+            self.add_loss(self.mu2_regularizer(self.mu2))
+        if self.sig2_regularizer is not None:
+            self.add_loss(self.sig2_regularizer(self.sig2))
+
+        self.trainable_weights = [self.mu1, self.sig1, self.mu2, self.sig2]
+        input_dim = self.input_dim
 
         self.kernel = self.add_weight(shape=kernel_shape,
                                       initializer=self.kernel_initializer,
@@ -373,57 +403,36 @@ class Target2D(Layer):
         self.input_spec = InputSpec(ndim=self.rank + 2,
                                     axes={channel_axis: input_dim})
 
-        # Target addition
-        self.input_length = input_shape[2]
-        input_length = self.input_length
-        input_dim = kernel_shape[-1]
-
-        mu_init = np.ones((input_dim, 1), K.floatx()) / 2
-        sig_init = np.ones((input_dim, 1), K.floatx())
-        base = np.tile(np.arange(input_length, dtype=K.floatx()), (input_dim, 1))
-
-        # self.mu1 = tf.Variable(mu_init, name='mu1')
-        # self.sig1 = tf.Variable(sig_init, name='sig1')
-        # self.mu2 = tf.Variable(mu_init, name='mu2')
-        # self.sig2 = tf.Variable(sig_init, name='sig2')
-        # if self.mu1_regularizer is not None:
-        #     self.add_loss(self.mu1_regularizer(self.mu1))
-        # if self.sig1_regularizer is not None:
-        #     self.add_loss(self.sig1_regularizer(self.sig1))
-        # if self.mu2_regularizer is not None:
-        #     self.add_loss(self.mu2_regularizer(self.mu2))
-        # if self.sig2_regularizer is not None:
-        #     self.add_loss(self.sig2_regularizer(self.sig2))
-
-        self.mu1 = self.add_weight(shape=mu_init.shape,
+        '''
+        #self.mu1 = self.add_weight(shape=mu_init.shape,
                                    initializer=custom_mu_init,
                                    name='mu1',
                                    regularizer=self.mu1_regularizer,
                                    constraint=self.mu1_constraint)
 
-        self.mu2 = self.add_weight(shape=mu_init.shape,
+        #self.mu2 = self.add_weight(shape=mu_init.shape,
                                    initializer=custom_mu_init,
                                    name='mu2',
                                    regularizer=self.mu2_regularizer,
                                    constraint=self.mu2_constraint)
 
-        self.sig1 = self.add_weight(shape=sig_init.shape,
+        #self.sig1 = self.add_weight(shape=sig_init.shape,
                                     initializer='Ones',
                                     name='sig1',
                                     regularizer=self.sig1_regularizer,
                                     constraint=self.sig1_constraint)
 
-        self.sig2 = self.add_weight(shape=sig_init.shape,
+        #self.sig2 = self.add_weight(shape=sig_init.shape,
                                     initializer='Ones',
                                     name='sig2',
                                     regularizer=self.sig2_regularizer,
                                     constraint=self.sig2_constraint)
-
+        '''
         self.mu1 = tf.clip_by_value(self.mu1, 1/input_length, 1-(1/input_length))
         self.mu2 = tf.clip_by_value(self.mu2, 1/input_length, 1-(1/input_length))
         self.sig1 = tf.clip_by_value(self.sig1, 3/(2*input_length), 1)
         self.sig2 = tf.clip_by_value(self.sig2, 3/(2*input_length), 1)
-        # self.trainable_weights = [self.kernel, self.mu1, self.sig1, self.mu2, self.sig2]
+
 
         self.base = tf.Variable(base)
         self.mu1_tiled = tf.tile(self.mu1, (1, input_length))
@@ -570,3 +579,170 @@ class Target2D(Layer):
         }
         base_config = super(Target2D, self).get_config()
         return dict(list(base_config.items()) + list(config.items()))
+
+
+class SpatialTransformer(Layer):
+    """Spatial Transformer Layer
+    Implements a spatial transformer layer as described in [1]_.
+    Borrowed from [2]_:
+    downsample_fator : float
+        A value of 1 will keep the orignal size of the image.
+        Values larger than 1 will down sample the image. Values below 1 will
+        upsample the image.
+        example image: height= 100, width = 200
+        downsample_factor = 2
+        output image will then be 50, 100
+    References
+    ----------
+    .. [1]  Spatial Transformer Networks
+            Max Jaderberg, Karen Simonyan, Andrew Zisserman, Koray Kavukcuoglu
+            Submitted on 5 Jun 2015
+    .. [2]  https://github.com/skaae/transformer_network/blob/master/transformerlayer.py
+    .. [3]  https://github.com/EderSantana/seya/blob/keras1/seya/layers/attention.py
+    """
+
+    def __init__(self,
+                 localization_net,
+                 output_size,
+                 **kwargs):
+        self.locnet = localization_net
+        self.output_size = output_size
+        super(SpatialTransformer, self).__init__(**kwargs)
+
+    def build(self, input_shape):
+        self.locnet.build(input_shape)
+        self.trainable_weights = self.locnet.trainable_weights
+        #self.regularizers = self.locnet.regularizers //NOT SUER ABOUT THIS, THERE IS NO MORE SUCH PARAMETR AT self.locnet
+        self.constraints = self.locnet.constraints
+
+    def compute_output_shape(self, input_shape):
+        output_size = self.output_size
+        return (None,
+                int(output_size[0]),
+                int(output_size[1]),
+                int(input_shape[-1]))
+
+    def call(self, X, mask=None):
+        affine_transformation = self.locnet.call(X)
+        output = self._transform(affine_transformation, X, self.output_size)
+        return output
+
+    def _repeat(self, x, num_repeats):
+        ones = tf.ones((1, num_repeats), dtype='int32')
+        x = tf.reshape(x, shape=(-1,1))
+        x = tf.matmul(x, ones)
+        return tf.reshape(x, [-1])
+
+    def _interpolate(self, image, x, y, output_size):
+        batch_size = tf.shape(image)[0]
+        height = tf.shape(image)[1]
+        width = tf.shape(image)[2]
+        num_channels = tf.shape(image)[3]
+
+        x = tf.cast(x , dtype='float32')
+        y = tf.cast(y , dtype='float32')
+
+        height_float = tf.cast(height, dtype='float32')
+        width_float = tf.cast(width, dtype='float32')
+
+        output_height = output_size[0]
+        output_width  = output_size[1]
+
+        x = .5*(x + 1.0)*(width_float)
+        y = .5*(y + 1.0)*(height_float)
+
+        x0 = tf.cast(tf.floor(x), 'int32')
+        x1 = x0 + 1
+        y0 = tf.cast(tf.floor(y), 'int32')
+        y1 = y0 + 1
+
+        max_y = tf.cast(height - 1, dtype='int32')
+        max_x = tf.cast(width - 1,  dtype='int32')
+        zero = tf.zeros([], dtype='int32')
+
+        x0 = tf.clip_by_value(x0, zero, max_x)
+        x1 = tf.clip_by_value(x1, zero, max_x)
+        y0 = tf.clip_by_value(y0, zero, max_y)
+        y1 = tf.clip_by_value(y1, zero, max_y)
+
+        flat_image_dimensions = width*height
+        pixels_batch = tf.range(batch_size)*flat_image_dimensions
+        flat_output_dimensions = output_height*output_width
+        base = self._repeat(pixels_batch, flat_output_dimensions)
+        base_y0 = base + y0*width
+        base_y1 = base + y1*width
+        indices_a = base_y0 + x0
+        indices_b = base_y1 + x0
+        indices_c = base_y0 + x1
+        indices_d = base_y1 + x1
+
+        flat_image = tf.reshape(image, shape=(-1, num_channels))
+        flat_image = tf.cast(flat_image, dtype='float32')
+        pixel_values_a = tf.gather(flat_image, indices_a)
+        pixel_values_b = tf.gather(flat_image, indices_b)
+        pixel_values_c = tf.gather(flat_image, indices_c)
+        pixel_values_d = tf.gather(flat_image, indices_d)
+
+        x0 = tf.cast(x0, 'float32')
+        x1 = tf.cast(x1, 'float32')
+        y0 = tf.cast(y0, 'float32')
+        y1 = tf.cast(y1, 'float32')
+
+        area_a = tf.expand_dims(((x1 - x) * (y1 - y)), 1)
+        area_b = tf.expand_dims(((x1 - x) * (y - y0)), 1)
+        area_c = tf.expand_dims(((x - x0) * (y1 - y)), 1)
+        area_d = tf.expand_dims(((x - x0) * (y - y0)), 1)
+        output = tf.add_n([area_a*pixel_values_a,
+                           area_b*pixel_values_b,
+                           area_c*pixel_values_c,
+                           area_d*pixel_values_d])
+        return output
+
+    def _meshgrid(self, height, width):
+        x_linspace = tf.linspace(-1., 1., width)
+        y_linspace = tf.linspace(-1., 1., height)
+        x_coordinates, y_coordinates = tf.meshgrid(x_linspace, y_linspace)
+        x_coordinates = tf.reshape(x_coordinates, [-1])
+        y_coordinates = tf.reshape(y_coordinates, [-1])
+        ones = tf.ones_like(x_coordinates)
+        indices_grid = tf.concat([x_coordinates, y_coordinates, ones], 0)
+        return indices_grid
+
+    def _transform(self, affine_transformation, input_shape, output_size):
+        batch_size = tf.shape(input_shape)[0]
+        height = tf.shape(input_shape)[1]
+        width = tf.shape(input_shape)[2]
+        num_channels = tf.shape(input_shape)[3]
+
+        affine_transformation = tf.reshape(affine_transformation, shape=(batch_size,2,3))
+
+        affine_transformation = tf.reshape(affine_transformation, (-1, 2, 3))
+        affine_transformation = tf.cast(affine_transformation, 'float32')
+
+        width = tf.cast(width, dtype='float32')
+        height = tf.cast(height, dtype='float32')
+        output_height = output_size[0]
+        output_width = output_size[1]
+        indices_grid = self._meshgrid(output_height, output_width)
+        indices_grid = tf.expand_dims(indices_grid, 0)
+        indices_grid = tf.reshape(indices_grid, [-1]) # flatten?
+
+        indices_grid = tf.tile(indices_grid, tf.stack([batch_size]))
+        indices_grid = tf.reshape(indices_grid, (batch_size, 3, -1))
+
+        transformed_grid = tf.matmul(affine_transformation, indices_grid)
+        x_s = tf.slice(transformed_grid, [0, 0, 0], [-1, 1, -1])
+        y_s = tf.slice(transformed_grid, [0, 1, 0], [-1, 1, -1])
+        x_s_flatten = tf.reshape(x_s, [-1])
+        y_s_flatten = tf.reshape(y_s, [-1])
+
+        transformed_image = self._interpolate(input_shape,
+                                                x_s_flatten,
+                                                y_s_flatten,
+                                                output_size)
+
+        transformed_image = tf.reshape(transformed_image, shape=(batch_size,
+                                                                output_height,
+                                                                output_width,
+                                                                num_channels))
+        return transformed_image

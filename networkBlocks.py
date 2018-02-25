@@ -6,16 +6,6 @@ from keras import backend as K
 from layer import AR2D, Target2D
 from keras.models import Model
 
-def DenseTarget2D(x, growth_rate, weight_decay=1e-4, include_target = 'false', attention_function='cauchy', l2=0.00001, use_bias=False):
-    x = BatchNormalization()(x)
-    x = Activation('relu')(x)
-    if include_target == 'false':
-        x = Conv2D(growth_rate, kernel_size=(3, 3), kernel_initializer='he_normal', padding='same', use_bias=use_bias,kernel_regularizer=regularizers.l2(weight_decay))(x)
-    elif include_target == 'preslice':
-        x = Target2D(growth_rate, kernel_size=(3, 3), kernel_initializer='he_normal', padding='same', use_bias=use_bias, preslice=True, kernel_regularizer=regularizers.l2(weight_decay), attention_function=attention_function, sig1_regularizer=regularizers.l2(l2),sig2_regularizer=regularizers.l2(l2))(x)
-    else:
-        x = Target2D(growth_rate, kernel_size=(3, 3), kernel_initializer='he_normal', padding='same', use_bias=use_bias,kernel_regularizer=regularizers.l2(weight_decay), attention_function=attention_function, sig1_regularizer=regularizers.l2(l2),sig2_regularizer=regularizers.l2(l2))(x)
-    return x
 
 def DenseNet(in_shape=(32, 32, 3), nb_dense_block = 3, lay_per_block = 6, growth_rate=48, bottleneck=True, reduction=0.5, dropout_rate=0.0, weight_decay=1e-4, classes=10, include_target='false', l2=0.01, l2_buildup = 1, weights_path=None):
     '''Instantiate the DenseNet 121 architecture,
@@ -168,6 +158,30 @@ def transition_block(x, stage, nb_filter, compression=1.0, dropout_rate=None, we
 
     return x
 
+
+def DenseTarget2D(x, growth_rate, weight_decay=1e-4, include_target = 'false', attention_function='cauchy', l2=0.00001, use_bias=False):
+    """
+    Composite convolutional operation (BN-relu-conv, with optional targeting) for a TDN
+    :param x: input
+    :param growth_rate: number of kernels to add
+    :param weight_decay: l2 decay on kernel
+    :param include_target: whether to implement target layer
+    :param attention_function: 'cauchy' or 'gaussian'
+    :param l2: l2 decay for sigmas
+    :param use_bias: whether to use bias on the convolutional layers
+    :return:
+    """
+    x = BatchNormalization()(x)
+    x = Activation('relu')(x)
+    if include_target == 'false':
+        x = Conv2D(growth_rate, kernel_size=(3, 3), kernel_initializer='he_normal', padding='same', use_bias=use_bias,kernel_regularizer=regularizers.l2(weight_decay))(x)
+    elif include_target == 'preslice':
+        x = Target2D(growth_rate, kernel_size=(3, 3), kernel_initializer='he_normal', padding='same', use_bias=use_bias, preslice=True, kernel_regularizer=regularizers.l2(weight_decay), attention_function=attention_function, sig1_regularizer=regularizers.l2(l2),sig2_regularizer=regularizers.l2(l2))(x)
+    else:
+        x = Target2D(growth_rate, kernel_size=(3, 3), kernel_initializer='he_normal', padding='same', use_bias=use_bias,kernel_regularizer=regularizers.l2(weight_decay), attention_function=attention_function, sig1_regularizer=regularizers.l2(l2),sig2_regularizer=regularizers.l2(l2))(x)
+    return x
+
+
 def wideResNet(k, dropout, include_target='false', l2=0.01, l2_buildup = 1):
     # Determine proper input shape
     if K.image_dim_ordering() == 'th':
@@ -201,6 +215,7 @@ def wideResNet(k, dropout, include_target='false', l2=0.01, l2_buildup = 1):
     model = Model(img_input, x)
 
     return model
+
 
 def identity_block(input_tensor, filters, dropout, include_target='false', l2=0.01, l2_buildup = 1):
     '''The identity_block is the block that has no conv layer at shortcut
